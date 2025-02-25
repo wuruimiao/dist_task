@@ -36,17 +36,13 @@ class FileProxy(Proxy):
         self._to_pull[worker_id].add(task_id)
         return OK
 
-    def push_tasks(self, tasks: [FileTask]) -> Error:
+    def push_tasks(self, tasks: dict[str, Path]) -> Error:
         while len(tasks) > 0:
             worker: FileWorker
             worker, free_num = self.get_a_worker()
             if worker:
                 for i in range(free_num):
-                    task: FileTask = tasks.pop()
-                    task_id = task.id
-                    task_dir, _ = task.task_dir()
-                    if not task_dir:
-                        continue
+                    task_id, task_dir = tasks.popitem()
 
                     if self._is_pushed(task_id):
                         continue
