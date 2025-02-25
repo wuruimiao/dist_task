@@ -5,7 +5,7 @@ from abc import ABCMeta, abstractmethod
 from multiprocessing import Pool
 from pathlib import Path
 
-from common_tool.errno import Error
+from common_tool.errno import Error, OK
 from common_tool.log import logger
 
 from dist_task.abstract.task import Task, TaskStatus
@@ -35,16 +35,34 @@ class Worker(metaclass=ABCMeta):
         pass
 
     @abstractmethod
+    def get_the_task(self, task_id) -> Task:
+        pass
+
+    @abstractmethod
+    def do_pull_task(self, task: Task, local_dir) -> Error:
+        pass
+
+    @abstractmethod
+    def do_push_task(self, task: Task) -> Error:
+        pass
+
     def pull_task(self, task_id: str, local_dir) -> Error:
-        pass
+        task = self.get_the_task(task_id)
+        err = self.do_pull_task(task, local_dir)
+        if not err.ok:
+            return err
+        return task.done()
 
-    @abstractmethod
     def push_task(self, task_id: str) -> Error:
-        pass
+        task = self.get_the_task(task_id)
+        err = self.do_push_task(task)
+        if not err.ok:
+            return err
+        return task.todo()
 
-    @abstractmethod
     def get_task_status(self, task_id: str) -> [TaskStatus, Error]:
-        pass
+        task = self.get_the_task(task_id)
+        return task.status(), OK
 
     @abstractmethod
     def get_unfinished_id(self) -> [str]:

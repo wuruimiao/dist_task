@@ -49,12 +49,13 @@ class FileWorker(Worker):
             return SYNC
         return OK
 
-    def push_task(self, task_id) -> Error:
-        task = FileTask(task_id, self._task_dir, self._status_dir, self._host)
-        return task.todo()
+    def get_the_task(self, task_id) -> FileTask:
+        return FileTask(task_id, self._task_dir, self._status_dir, self._host)
 
-    def pull_task(self, task_id, local_dir: str) -> Error:
-        task = FileTask(task_id, self._task_dir, self._status_dir, self._host)
+    def do_push_task(self, task: FileTask) -> Error:
+        pass
+
+    def do_pull_task(self, task: FileTask, local_dir) -> Error:
         task_dir, _ = task.task_dir()
         if not task_dir:
             return NO_FILE
@@ -62,27 +63,22 @@ class FileWorker(Worker):
         ok = self._sync(str(task_dir), local_dir, to_remote=False)
         logger.info(f'end pull {task_dir} from {self.id}')
         if ok:
-            task.done()
             return OK
         return SYNC
 
-    def get_task_status(self, task_id: str) -> [TaskStatus, Error]:
-        task = FileTask(task_id, self._task_dir, self._status_dir, self._host)
-        return task.status(), OK
-
     def get_unfinished_id(self) -> [str]:
-        return [task.id() for task in self.get_all_tasks() if task.is_ing() or task.is_todo()]
+        return [task.id() for task in self._get_all_tasks() if task.is_ing() or task.is_todo()]
 
-    def get_all_tasks(self):
+    def _get_all_tasks(self):
         files, _ = list_dir(self.is_remote(), self._host, USER, self._status_dir)
         tasks = [FileTask(name, self._task_dir, self._status_dir, self._host) for name in files.keys()]
         return tasks
 
     def get_ing_tasks(self) -> [Task]:
-        return [task for task in self.get_all_tasks() if task.is_ing()]
+        return [task for task in self._get_all_tasks() if task.is_ing()]
 
     def get_todo_tasks(self) -> [Task]:
-        return [task for task in self.get_all_tasks() if task.is_todo()]
+        return [task for task in self._get_all_tasks() if task.is_todo()]
 
     def get_done_tasks(self):
-        return [task for task in self.get_all_tasks() if task.is_done()]
+        return [task for task in self._get_all_tasks() if task.is_done()]
