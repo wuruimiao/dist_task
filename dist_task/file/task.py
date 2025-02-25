@@ -58,7 +58,7 @@ class FileTask(Task):
         if not status:
             return INIT
         if len(status) > 1:
-            logger.error(f'task status err {self._id}, will use first status')
+            logger.error(f'task status err {self._id} {status}, will use first status')
         status = {s.suffix.replace('.', '') for s in status}
         for s in [TODO, ING, SUCCESS, FAIL, DONE]:
             if s in status:
@@ -86,7 +86,12 @@ class FileTask(Task):
     def id(self) -> str:
         return self._id
 
-    def mark_todo(self) -> Error:
+    def mark_todo(self, force: bool = False) -> Error:
+        if force:
+            for i in ((self.is_ing, self._ing),):
+                if i[0]():
+                    self._rm(i[1])
+
         self._create(self._todo)
         return OK
 

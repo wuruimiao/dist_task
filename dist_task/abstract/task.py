@@ -48,7 +48,7 @@ class Task(metaclass=ABCMeta):
         return self.status() == DONE
 
     @abstractmethod
-    def mark_todo(self) -> Error:
+    def mark_todo(self, force: bool = False) -> Error:
         pass
 
     @abstractmethod
@@ -72,9 +72,9 @@ class Task(metaclass=ABCMeta):
         pass
 
     def todo(self, force=False) -> Error:
-        if not force and not self.is_init():
-            return Todo
-        return self.mark_todo()
+        if (force and self.is_ing()) or self.is_init():
+            return self.mark_todo(force)
+        return Todo
 
     def ing(self) -> Error:
         if not self.is_todo():
