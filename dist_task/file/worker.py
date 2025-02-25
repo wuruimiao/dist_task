@@ -53,7 +53,7 @@ class FileWorker(Worker):
         return FileTask(task_id, self._task_dir, self._status_dir, self._host)
 
     def do_push_task(self, task: FileTask) -> Error:
-        pass
+        return OK
 
     def do_pull_task(self, task: FileTask, local_dir) -> Error:
         task_dir, _ = task.task_dir()

@@ -64,7 +64,7 @@ class Proxy(metaclass=ABCMeta):
 
         futures = [self._thread_pool.submit(self._push_to_worker, worker, task_id_dirs)
                    for worker, task_id_dirs in to_push.items()]
-        logger.info(f'push task ok {[future.result() for future in futures]}')
+        [future.result() for future in futures]
         return OK
 
     def _pull_from_worker(self, worker: Worker, task_ids: [str], local_dir: str):
