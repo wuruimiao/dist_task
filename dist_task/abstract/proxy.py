@@ -26,17 +26,17 @@ class Proxy(metaclass=ABCMeta):
     def get_the_worker(self, worker_id: str) -> Worker:
         return self._workers.get(worker_id)
 
-    def _push_to_worker(self, worker, task_id_dirs: [tuple[str, str]]):
+    def _push_to_worker(self, worker, task_id_storages: [tuple[str, str]]):
         oks = []
-        for task_id, task_dir in task_id_dirs:
-            err = worker.upload_task(task_dir)
+        for task_id, task_storage in task_id_storages:
+            err = worker.upload_task(task_storage)
             if not err.ok:
-                logger.error(f'push task {task_id} {task_dir} {err}')
+                logger.error(f'push task {task_id} {task_storage} {err}')
                 continue
 
             err = worker.push_task(task_id)
             if not err.ok:
-                logger.error(f'push task {task_id} {task_dir} {err}')
+                logger.error(f'push task {task_id} {task_storage} {err}')
                 continue
 
             self.record_pushed_worker_task(task_id, worker.id())
@@ -44,14 +44,14 @@ class Proxy(metaclass=ABCMeta):
             logger.info(f"push task {task_id} to {worker.id()}")
         return {'worker': worker.id(), 'ok': oks}
 
-    def push_tasks(self, tasks: dict[str, Path]) -> Error:
-        if len(tasks) == 0:
+    def push_tasks(self, task_id_storages: dict[str, Path]) -> Error:
+        if len(task_id_storages) == 0:
             return OK
         to_push = {}
         for worker, free_num in self.free_workers().items():
-            task_id_dirs: [tuple[str, str]] = []
+            _todos: [tuple[str, str]] = []
             for i in range(free_num):
-                task_id, task_dir = tasks.popitem()
+                task_id, task_storage = task_id_storages.popitem()
 
                 if self.is_pushed(task_id):
                     continue
@@ -59,11 +59,11 @@ class Proxy(metaclass=ABCMeta):
                 if not worker.get_the_task(task_id).is_init():
                     continue
 
-                task_id_dirs.append((task_id, task_dir))
-            to_push[worker] = task_id_dirs
+                _todos.append((task_id, task_storage))
+            to_push[worker] = _todos
 
-        futures = [self._thread_pool.submit(self._push_to_worker, worker, task_id_dirs)
-                   for worker, task_id_dirs in to_push.items()]
+        futures = [self._thread_pool.submit(self._push_to_worker, worker, _todos)
+                   for worker, _todos in to_push.items()]
         [future.result() for future in futures]
         return OK
 
@@ -93,7 +93,7 @@ class Proxy(metaclass=ABCMeta):
         [ok_ids.extend(future.result()) for future in futures]
         return ok_ids, OK
 
-    def start(self, local_dir: str, tasks: dict[str, Path]) -> Error:
+    def start(self, local_dir: str, task_id_storages: dict[str, Path]) -> Error:
         from common_tool.server import MultiM
 
         def push(_tasks):
@@ -103,7 +103,7 @@ class Proxy(metaclass=ABCMeta):
                     break
                 self.push_tasks(_tasks)
                 time.sleep(3)
-        MultiM.add_p('proxy_push_task', push, tasks)
+        MultiM.add_p('proxy_push_task', push, task_id_storages)
 
         def pull(_local_dir):
             while True:
