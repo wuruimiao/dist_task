@@ -1,54 +1,70 @@
 from pathlib import Path
+
+from common_tool.errno import Error, OK
+from common_tool.log import logger
+from common_tool.system import sync_files
+
 from dist_task.abstract import Worker
-from dist_task.abstract.task import Task
+from dist_task.abstract.task import Task, TaskStatus
+from dist_task.file.common import list_dir
+from dist_task.file.config import USER, is_remote
 from dist_task.file.task import FileTask
-from dist_task.utils.errno import Error, OK
-from dist_task.utils.cmd import run_cmd
-
-
-def sync_files(local_folder, remote_folder, remote_host, remote_user):
-    # 构造rsync命令
-    rsync_command = [
-        'rsync', '-avz', local_folder, f'{remote_user}@{remote_host}:{remote_folder}'
-    ]
-    run_cmd(rsync_command)
-
-    # # 调用rsync命令
-    # try:
-    #     result = subprocess.run(rsync_command, check=True, capture_output=True, text=True)
-    #     print(f"Rsync completed successfully:\n{result.stdout}")
-    # except subprocess.CalledProcessError as e:
-    #     print(f"Error occurred during rsync:\n{e.stderr}")
 
 
 class FileWorker(Worker):
-    def __init__(self, status_dir: str, task_dir: str, ID: str, con: int):
-        self.status_dir = Path(status_dir)
-        self.task_dir = Path(task_dir)
-        self.ID = ID
+    def __init__(self, status_dir: str, task_dir: str, host: str, con: int):
+        self._status_dir = Path(status_dir)
+        self._task_dir = Path(task_dir)
+        self._host = host
         self.set_con(con)
 
+    def set_local(self):
+        self._host = 'local'
+
+    def _is_remote(self):
+        return is_remote(self._host)
+
+    def _sync(self, _from, _to, to_remote: bool = True):
+        if self._is_remote():
+            sync_files(_from, _to, to_remote, self._host, USER)
+        else:
+            sync_files(_from, _to)
+
+    @property
+    def id(self) -> str:
+        return self._host
+
     def upload_task(self, task_dir: Path) -> Error:
-        if self.ID == "local":
-            return OK
-
-        sync_files(str(task_dir), str(self.task_dir), self.ID, "ubuntu")
+        """
+        :param task_dir: proxy的任务路径
+        :return:
+        """
+        logger.info(f'start upload {task_dir} to {self.id}')
+        self._sync(task_dir.resolve(), self._task_dir.resolve())
+        logger.info(f'end upload {task_dir} to {self.id}')
         return OK
 
-    def push_task(self, task) -> Error:
-        task = FileTask(self.status_dir, task, self.task_dir)
-        task.mark_todo()
+    def push_task(self, task_id) -> Error:
+        task = FileTask(task_id, self._task_dir, self._status_dir, self._host)
+        return task.todo()
+
+    def pull_task(self, task_id, local_dir) -> Error:
+        task = FileTask(task_id, self._task_dir, self._status_dir, self._host)
+        task_dir, _ = task.task_dir()
+        self._sync(task_dir.resolve(), local_dir, to_remote=False)
+        task.done()
         return OK
+
+    def get_task_status(self, task_id: str) -> [TaskStatus, Error]:
+        task = FileTask(task_id, self._task_dir, self._status_dir, self._host)
+        return task.status(), OK
 
     def get_unfinished_id(self) -> [str]:
         return [task.id for task in self.get_all_tasks() if task.is_ing() or task.is_todo()]
 
     def get_all_tasks(self):
-        tasks = []
-        for file in self.status_dir.iterdir():
-            if not file.is_file():
-                continue
-            tasks.append(FileTask(self.status_dir, file.stem, self.task_dir))
+        files, _ = list_dir(self._is_remote(), self._host, USER, self._status_dir)
+        tasks = [FileTask(name, self._task_dir, self._status_dir, self._host) for name in files.keys()]
         return tasks
 
     def get_ing_tasks(self) -> [Task]:
@@ -56,3 +72,6 @@ class FileWorker(Worker):
 
     def get_todo_tasks(self) -> [Task]:
         return [task for task in self.get_all_tasks() if task.is_todo()]
+
+    def get_done_tasks(self):
+        return [task for task in self.get_all_tasks() if task.is_done()]

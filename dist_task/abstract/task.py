@@ -1,22 +1,51 @@
 from abc import ABCMeta, abstractmethod
-from dist_task.utils.errno import Error
+from common_tool.errno import Error
 
+Todo = Error(1001, "todo_not_init")
 Ing = Error(1000, "ing_not_todo")
+Success = Error(1002, "success_not_ing")
+Fail = Error(1003, "fail_not_ing")
+Done = Error(1004, "done_not_success_fail")
+
+
+class TaskStatus(str):
+    pass
+
+
+INIT = TaskStatus("init")
+TODO = TaskStatus("todo")
+ING = TaskStatus("ing")
+SUCCESS = TaskStatus("success")
+FAIL = TaskStatus("fail")
+DONE = TaskStatus("done")
 
 
 class Task(metaclass=ABCMeta):
     @abstractmethod
-    @property
     def id(self) -> str:
         pass
 
     @abstractmethod
-    def is_todo(self) -> bool:
+    def status(self) -> TaskStatus:
         pass
 
-    @abstractmethod
+    def is_init(self) -> bool:
+        return self.status() == INIT
+
+    def is_todo(self) -> bool:
+        return self.status() == TODO
+
     def is_ing(self) -> bool:
-        pass
+        return self.status() == ING
+
+    def is_success(self) -> bool:
+        return self.status() == SUCCESS
+
+    def is_fail(self) -> bool:
+        return self.status() == FAIL
+
+    def is_done(self) -> bool:
+        return self.status() == DONE
 
     @abstractmethod
     def mark_todo(self) -> Error:
@@ -34,6 +63,19 @@ class Task(metaclass=ABCMeta):
     def mark_fail(self) -> Error:
         pass
 
+    @abstractmethod
+    def mark_done(self) -> Error:
+        pass
+
+    @abstractmethod
+    def clean(self) -> Error:
+        pass
+
+    def todo(self, force=False) -> Error:
+        if not force and not self.is_init():
+            return Todo
+        return self.mark_todo()
+
     def ing(self) -> Error:
         if not self.is_todo():
             return Ing
@@ -41,10 +83,15 @@ class Task(metaclass=ABCMeta):
 
     def success(self) -> Error:
         if not self.is_ing():
-            print(f"success not ing {self}")
+            return Success
         return self.mark_success()
 
     def fail(self) -> Error:
         if not self.is_ing():
-            print(f"fail not ing {self}")
+            return Fail
         return self.mark_fail()
+
+    def done(self) -> Error:
+        if not self.is_success() and not self.is_fail():
+            return Done
+        return self.mark_done()

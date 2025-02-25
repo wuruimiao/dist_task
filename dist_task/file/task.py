@@ -1,47 +1,123 @@
-
 from pathlib import Path
-from dist_task.abstract.task import Task
-from dist_task.utils.errno import Error, OK
+from typing import Optional
+
+from common_tool.errno import Error, OK
+from common_tool.log import logger
+from common_tool.system import remote_file_exist, remote_create_file, remote_rm_file
+
+from dist_task.file.common import list_dir
+from dist_task.abstract.task import Task, TaskStatus, TODO, ING, SUCCESS, FAIL, DONE, INIT
+from dist_task.file.config import is_remote, USER
 
 
 class FileTask(Task):
-    def __init__(self, status_dir: Path, name, task_dir: Path):
-        self._id = name
-        self._todo = status_dir.joinpath(f"{self._id}.todo")
-        self._ing = status_dir.joinpath(f"{self._id}.ing")
-        self._success = status_dir.joinpath(f"{self._id}.success")
-        self._fail = status_dir.joinpath(f"{self._id}.fail")
+    def __init__(self, ID, task_dir: Path, status_dir: Path = "", host: str = ''):
+        """
+        :param ID: 任务ID，根据ID可以在task_dir中找到任务信息文件/文件夹
+        :param task_dir: 存放任务信息的路径，不包括任务文件/文件夹
+        :param status_dir: 任务状态路径
+        :param host: 远程host，远程任务
+        """
+        self._id = ID
+        if status_dir:
+            self._todo = status_dir.joinpath(f"{self._id}.{TODO}")
+            self._ing = status_dir.joinpath(f"{self._id}.{ING}")
+            self._success = status_dir.joinpath(f"{self._id}.{SUCCESS}")
+            self._fail = status_dir.joinpath(f"{self._id}.{FAIL}")
+            self._done = status_dir.joinpath(f"{self._id}.{DONE}")
+            self._status_dir = status_dir
+        self._host = host
         self._task_dir = task_dir
 
-    @property
-    def task_dir(self) -> Path:
-        return self._task_dir.joinpath(self.id)
+    def _is_remote(self):
+        return is_remote(self._host)
+
+    def _exist(self, to_check: Path) -> bool:
+        if self._is_remote():
+            return remote_file_exist(self._host, USER, to_check)
+        return to_check.exists()
+
+    def _create(self, to_create: Path):
+        if self._is_remote():
+            remote_create_file(self._host, USER, to_create)
+        else:
+            to_create.touch()
+
+    def _rm(self, to_rm: Path):
+        if self._is_remote():
+            remote_rm_file(self._host, USER, to_rm)
+        else:
+            if to_rm.is_file():
+                to_rm.unlink()
+            else:
+                to_rm.rmdir()
+
+    def status(self) -> TaskStatus:
+        files, _ = list_dir(self._is_remote(), self._host, USER, self._status_dir)
+        status = files.get(self._id)
+        if not status:
+            return INIT
+        if len(status) > 1:
+            logger.error(f'task status err {self._id}, will use first status')
+        status = {s.suffix for s in status}
+        for s in [TODO, ING, SUCCESS, FAIL, DONE]:
+            if s in status:
+                return s
+        logger.error(f'task status undefined status {status}, will use INIT')
+        return INIT
+
+    def task_dir(self) -> tuple[Optional[Path], bool]:
+        """
+        :return: 存放任务信息的文件/文加夹，是否是文件
+        """
+        files, dirs = list_dir(self._is_remote(), self._host, USER, self._task_dir)
+        f = files.get(self._id)
+        if f:
+            return f.pop(), True
+
+        f = dirs.get(self._id)
+        if f:
+            return f.pop(), False
+
+        logger.error(f'task dir {self._id} None')
+        return None, False
 
     @property
     def id(self) -> str:
         return self._id
 
-    def is_todo(self) -> bool:
-        return self._todo.exists()
-
-    def is_ing(self) -> bool:
-        return self._ing.exists()
-
     def mark_todo(self) -> Error:
-        self._todo.touch()
+        self._create(self._todo)
         return OK
 
     def mark_ing(self) -> Error:
-        self._todo.unlink()
-        self._ing.touch()
+        self._create(self._ing)
+        self._rm(self._todo)
         return OK
 
     def mark_success(self) -> Error:
-        self._ing.unlink()
-        self._success.touch()
+        self._create(self._success)
+        self._rm(self._ing)
         return OK
 
     def mark_fail(self) -> Error:
-        self._ing.unlink()
-        self._success.touch()
+        self._create(self._fail)
+        self._rm(self._ing)
+        return OK
+
+    def mark_done(self) -> Error:
+        if self.is_success():
+            self._rm(self._success)
+        if self.is_fail():
+            self._rm(self._fail)
+        self._create(self._done)
+        return OK
+
+    def clean(self) -> Error:
+        if not self.is_done():
+            return OK
+        task_dir, _ = self.task_dir()
+        if task_dir:
+            self._rm(task_dir)
+        self._rm(self._done)
         return OK
