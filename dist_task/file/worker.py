@@ -11,6 +11,7 @@ from dist_task.file.config import USER, is_remote
 from dist_task.file.task import FileTask
 
 SYNC = Error(5555, 'sync fail', 'sync同步失败')
+NO_FILE = Error(6666, 'no file', 'sync同步没有文件')
 
 
 class FileWorker(Worker):
@@ -33,7 +34,6 @@ class FileWorker(Worker):
             _, ok = sync_files(_from, _to)
         return ok
 
-    @property
     def id(self) -> str:
         return self._host
 
@@ -56,6 +56,8 @@ class FileWorker(Worker):
     def pull_task(self, task_id, local_dir: str) -> Error:
         task = FileTask(task_id, self._task_dir, self._status_dir, self._host)
         task_dir, _ = task.task_dir()
+        if not task_dir:
+            return NO_FILE
         logger.info(f'start pull {task_dir} from {self.id}')
         ok = self._sync(str(task_dir), local_dir, to_remote=False)
         logger.info(f'end pull {task_dir} from {self.id}')
@@ -69,7 +71,7 @@ class FileWorker(Worker):
         return task.status(), OK
 
     def get_unfinished_id(self) -> [str]:
-        return [task.id for task in self.get_all_tasks() if task.is_ing() or task.is_todo()]
+        return [task.id() for task in self.get_all_tasks() if task.is_ing() or task.is_todo()]
 
     def get_all_tasks(self):
         files, _ = list_dir(self.is_remote(), self._host, USER, self._status_dir)

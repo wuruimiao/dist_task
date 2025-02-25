@@ -82,7 +82,6 @@ class FileTask(Task):
         logger.error(f'task dir {self._id} None')
         return None, False
 
-    @property
     def id(self) -> str:
         return self._id
 
