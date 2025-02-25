@@ -60,9 +60,9 @@ class Worker(metaclass=ABCMeta):
             return err
         return task.todo()
 
-    def get_task_status(self, task_id: str) -> [TaskStatus, Error]:
+    def get_task_status(self, task_id: str) -> TaskStatus:
         task = self.get_the_task(task_id)
-        return task.status(), OK
+        return task.status()
 
     @abstractmethod
     def get_unfinished_id(self) -> [str]:

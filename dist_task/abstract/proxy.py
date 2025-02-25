@@ -56,6 +56,9 @@ class Proxy(metaclass=ABCMeta):
                 if self.is_pushed(task_id):
                     continue
 
+                if not worker.get_the_task(task_id).is_init():
+                    continue
+
                 task_id_dirs.append((task_id, task_dir))
             to_push[worker] = task_id_dirs
 
@@ -67,8 +70,7 @@ class Proxy(metaclass=ABCMeta):
     def _pull_from_worker(self, worker: Worker, task_ids: [str], local_dir: str):
         ok_ids = []
         for task_id in task_ids:
-            status, err = worker.get_task_status(task_id)
-            if not status.is_success():
+            if not worker.get_the_task(task_id).is_success():
                 continue
 
             err = worker.pull_task(task_id, local_dir)

@@ -10,8 +10,7 @@ Done = Error(1004, "done_not_success_fail")
 
 
 class TaskStatus(str):
-    def is_success(self) -> bool:
-        return self == SUCCESS
+    pass
 
 
 INIT = TaskStatus("init")
