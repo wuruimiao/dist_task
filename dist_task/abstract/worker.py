@@ -60,7 +60,7 @@ class Worker(metaclass=ABCMeta):
         pass
 
     def handle_task(self, task: Task) -> Error:
-        logger.info(f"start handle task {task.id}")
+        logger.info(f"start handle task {task.id} {len(self._handlers)} {self._concurrency}")
         err: Error
         err = task.ing()
         if not err.ok:
@@ -73,7 +73,7 @@ class Worker(metaclass=ABCMeta):
                 logger.error(f'do handle task {task.id} {err}')
                 task.fail()
                 return err
-
+        logger.info(f'end handle task {task.id}')
         return task.success()
 
     def start(self, auto_clean=False):
