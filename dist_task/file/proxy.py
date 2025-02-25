@@ -47,8 +47,16 @@ class FileProxy(Proxy):
                     if self._is_pushed(task_id):
                         continue
 
-                    worker.upload_task(task_dir)
-                    worker.push_task(task_id)
+                    err = worker.upload_task(task_dir)
+                    if not err.ok:
+                        logger.error(f'push task {task_id} {task_dir} {err}')
+                        continue
+
+                    err = worker.push_task(task_id)
+                    if not err.ok:
+                        logger.error(f'push task {task_id} {task_dir} {err}')
+                        continue
+
                     self.record_worker_task(task_id, worker.id)
 
                     logger.info(f"push task {task_id} to {worker.id}")
@@ -65,7 +73,10 @@ class FileProxy(Proxy):
                 status, err = worker.get_task_status(task_id)
                 if status == SUCCESS:
                     ok_ids.append(task_id)
-                    worker.pull_task(task_id, local_dir)
+                    err = worker.pull_task(task_id, local_dir)
+                    if not err.ok:
+                        logger.error(f'pull task {task_id} {err}')
+                        continue
                     logger.info(f"pull task {task_id} from {worker.id}")
                     dones[worker_id].add(task_id)
 

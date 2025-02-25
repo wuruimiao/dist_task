@@ -10,6 +10,8 @@ from dist_task.file.common import list_dir
 from dist_task.file.config import USER, is_remote
 from dist_task.file.task import FileTask
 
+SYNC = Error(5555, 'sync fail', 'sync同步失败')
+
 
 class FileWorker(Worker):
     def __init__(self, status_dir: str, task_dir: str, host: str, con: int):
@@ -24,11 +26,12 @@ class FileWorker(Worker):
     def is_remote(self) -> bool:
         return is_remote(self._host)
 
-    def _sync(self, _from, _to, to_remote: bool = True):
+    def _sync(self, _from, _to, to_remote: bool = True) -> bool:
         if self.is_remote():
-            sync_files(_from, _to, to_remote, self._host, USER)
+            _, ok = sync_files(_from, _to, to_remote, self._host, USER)
         else:
-            sync_files(_from, _to)
+            _, ok = sync_files(_from, _to)
+        return ok
 
     @property
     def id(self) -> str:
@@ -40,8 +43,10 @@ class FileWorker(Worker):
         :return:
         """
         logger.info(f'start upload {task_dir} to {self.id}')
-        self._sync(str(task_dir), str(self._task_dir))
-        logger.info(f'end upload {task_dir} to {self.id}')
+        ok = self._sync(str(task_dir), str(self._task_dir))
+        logger.info(f'end upload {task_dir} to {self.id} {ok}')
+        if not ok:
+            return SYNC
         return OK
 
     def push_task(self, task_id) -> Error:
@@ -52,10 +57,12 @@ class FileWorker(Worker):
         task = FileTask(task_id, self._task_dir, self._status_dir, self._host)
         task_dir, _ = task.task_dir()
         logger.info(f'start pull {task_dir} from {self.id}')
-        self._sync(str(task_dir), local_dir, to_remote=False)
+        ok = self._sync(str(task_dir), local_dir, to_remote=False)
         logger.info(f'end pull {task_dir} from {self.id}')
-        task.done()
-        return OK
+        if ok:
+            task.done()
+            return OK
+        return SYNC
 
     def get_task_status(self, task_id: str) -> [TaskStatus, Error]:
         task = FileTask(task_id, self._task_dir, self._status_dir, self._host)
