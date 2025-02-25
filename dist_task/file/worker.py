@@ -21,11 +21,11 @@ class FileWorker(Worker):
     def set_local(self):
         self._host = 'local'
 
-    def _is_remote(self):
+    def is_remote(self) -> bool:
         return is_remote(self._host)
 
     def _sync(self, _from, _to, to_remote: bool = True):
-        if self._is_remote():
+        if self.is_remote():
             sync_files(_from, _to, to_remote, self._host, USER)
         else:
             sync_files(_from, _to)
@@ -65,7 +65,7 @@ class FileWorker(Worker):
         return [task.id for task in self.get_all_tasks() if task.is_ing() or task.is_todo()]
 
     def get_all_tasks(self):
-        files, _ = list_dir(self._is_remote(), self._host, USER, self._status_dir)
+        files, _ = list_dir(self.is_remote(), self._host, USER, self._status_dir)
         tasks = [FileTask(name, self._task_dir, self._status_dir, self._host) for name in files.keys()]
         return tasks
 

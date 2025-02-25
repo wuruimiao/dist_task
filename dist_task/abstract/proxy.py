@@ -10,11 +10,17 @@ class Proxy(metaclass=ABCMeta):
         self._workers = {worker.id: worker for worker in workers}
 
     def get_a_worker(self) -> [Worker, int]:
+        # 优先远程资源
+        r_worker, r_free_num = None, 0
         for worker in self._workers.values():
             free_num = worker.free_num()
             if free_num > 0:
-                return worker, free_num
-        return None, 0
+                if worker.is_remote():
+                    return worker, free_num
+                else:
+                    r_worker = worker
+                    r_free_num = free_num
+        return r_worker, r_free_num
 
     def all_workers(self) -> dict[str, Worker]:
         return self._workers

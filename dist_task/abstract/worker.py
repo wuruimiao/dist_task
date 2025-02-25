@@ -17,6 +17,10 @@ class Worker(metaclass=ABCMeta):
     def id(self) -> str:
         pass
 
+    @abstractmethod
+    def is_remote(self) -> bool:
+        pass
+
     @classmethod
     def set_handler(cls, func, position=0):
         cls._handlers.insert(position, func)
