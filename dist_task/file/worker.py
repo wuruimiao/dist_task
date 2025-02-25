@@ -40,7 +40,7 @@ class FileWorker(Worker):
         :return:
         """
         logger.info(f'start upload {task_dir} to {self.id}')
-        self._sync(task_dir.resolve(), self._task_dir.resolve())
+        self._sync(str(task_dir), self._task_dir.resolve())
         logger.info(f'end upload {task_dir} to {self.id}')
         return OK
 
@@ -48,10 +48,12 @@ class FileWorker(Worker):
         task = FileTask(task_id, self._task_dir, self._status_dir, self._host)
         return task.todo()
 
-    def pull_task(self, task_id, local_dir) -> Error:
+    def pull_task(self, task_id, local_dir: str) -> Error:
         task = FileTask(task_id, self._task_dir, self._status_dir, self._host)
         task_dir, _ = task.task_dir()
-        self._sync(task_dir.resolve(), local_dir, to_remote=False)
+        logger.info(f'start pull {task_dir} from {self.id}')
+        self._sync(str(task_dir), local_dir, to_remote=False)
+        logger.info(f'end pull {task_dir} from {self.id}')
         task.done()
         return OK
 

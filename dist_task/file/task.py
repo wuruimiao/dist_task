@@ -59,7 +59,7 @@ class FileTask(Task):
             return INIT
         if len(status) > 1:
             logger.error(f'task status err {self._id}, will use first status')
-        status = {s.suffix for s in status}
+        status = {s.suffix.replace('.', '') for s in status}
         for s in [TODO, ING, SUCCESS, FAIL, DONE]:
             if s in status:
                 return s
