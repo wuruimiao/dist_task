@@ -1,12 +1,14 @@
+import functools
 import math
 import time
-import functools
-from pathlib import Path
 from abc import ABCMeta, abstractmethod
 from multiprocessing import Pool
+from pathlib import Path
+
 from common_tool.errno import Error
-from dist_task.abstract.task import Task, TaskStatus
 from common_tool.log import logger
+
+from dist_task.abstract.task import Task, TaskStatus
 
 
 class Worker(metaclass=ABCMeta):

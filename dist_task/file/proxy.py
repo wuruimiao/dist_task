@@ -1,13 +1,11 @@
-from collections import defaultdict
-from pathlib import Path
 import threading
+from collections import defaultdict
 from copy import deepcopy
+from pathlib import Path
 
 from common_tool.errno import Error, OK
-from common_tool.log import logger
 
 from dist_task.abstract.proxy import Proxy
-from dist_task.abstract.task import SUCCESS
 
 
 class FileProxy(Proxy):

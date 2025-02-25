@@ -1,11 +1,11 @@
 from abc import ABCMeta, abstractmethod
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-from dist_task.abstract.worker import Worker
-from collections import defaultdict, OrderedDict
 
 from common_tool.errno import Error, OK
 from common_tool.log import logger
-from concurrent.futures import ThreadPoolExecutor
+
+from dist_task.abstract.worker import Worker
 
 
 class Proxy(metaclass=ABCMeta):

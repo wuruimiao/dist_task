@@ -1,4 +1,5 @@
 from abc import ABCMeta, abstractmethod
+
 from common_tool.errno import Error
 
 Todo = Error(1001, "todo_not_init")
