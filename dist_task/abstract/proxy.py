@@ -10,7 +10,7 @@ from dist_task.abstract.worker import Worker
 
 class Proxy(metaclass=ABCMeta):
     _workers: dict[str, Worker] = {}
-    _thread_pool: ThreadPoolExecutor = None
+    _thread_pool: ThreadPoolExecutor = ThreadPoolExecutor(max_workers=20)
 
     def set_workers(self, workers: [Worker]):
         self._workers = {worker.id(): worker for worker in workers}
@@ -119,10 +119,6 @@ class Proxy(metaclass=ABCMeta):
     @abstractmethod
     def get_to_pull(self) -> dict[str, set[str]]:
         pass
-
-    def init(self) -> Error:
-        self._thread_pool = ThreadPoolExecutor(max_workers=len(self._workers) * 3)
-        return OK
 
     def close(self):
         """
