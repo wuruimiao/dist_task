@@ -42,9 +42,9 @@ class FileWorker(Worker):
         :param task_dir: proxy的任务路径
         :return:
         """
-        logger.info(f'start upload {task_dir} to {self.id}')
+        logger.info(f'start upload {task_dir} to {self.id()}')
         ok = self._sync(str(task_dir), str(self._task_dir))
-        logger.info(f'end upload {task_dir} to {self.id} {ok}')
+        logger.info(f'end upload {task_dir} to {self.id()} {ok}')
         if not ok:
             return SYNC
         return OK
@@ -59,9 +59,9 @@ class FileWorker(Worker):
         task_dir, _ = task.task_dir()
         if not task_dir:
             return NO_FILE
-        logger.info(f'start pull {task_dir} from {self.id}')
+        logger.info(f'start pull {task_dir} from {self.id()}')
         ok = self._sync(str(task_dir), local_dir, to_remote=False)
-        logger.info(f'end pull {task_dir} from {self.id}')
+        logger.info(f'end pull {task_dir} from {self.id()}')
         if ok:
             return OK
         return SYNC
