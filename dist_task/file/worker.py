@@ -40,7 +40,7 @@ class FileWorker(Worker):
         :return:
         """
         logger.info(f'start upload {task_dir} to {self.id}')
-        self._sync(str(task_dir), self._task_dir.resolve())
+        self._sync(str(task_dir), str(self._task_dir))
         logger.info(f'end upload {task_dir} to {self.id}')
         return OK
 
