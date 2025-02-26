@@ -1,12 +1,13 @@
 import time
 from abc import ABCMeta, abstractmethod
 from concurrent.futures import ThreadPoolExecutor
-from pathlib import Path
+from typing import Any
 
 from common_tool.errno import Error, OK
 from common_tool.log import logger
 
 from dist_task.abstract.worker import Worker
+from dist_task.abstract.task import Task
 
 
 class Proxy(metaclass=ABCMeta):
@@ -26,15 +27,16 @@ class Proxy(metaclass=ABCMeta):
     def get_the_worker(self, worker_id: str) -> Worker:
         return self._workers.get(worker_id)
 
-    def _push_to_worker(self, worker, task_id_storages: [tuple[str, str]]):
+    def _push_to_worker(self, worker, task_and_storage: [tuple[Task, str]]):
         oks = []
-        for task_id, task_storage in task_id_storages:
+        for task, task_storage in task_and_storage:
+            task_id = task.id()
             err = worker.upload_task(task_storage)
             if not err.ok:
                 logger.error(f'push task {task_id} {task_storage} {err}')
                 continue
 
-            err = worker.push_task(task_id)
+            err = worker.push_task(task)
             if not err.ok:
                 logger.error(f'push task {task_id} {task_storage} {err}')
                 continue
@@ -44,72 +46,76 @@ class Proxy(metaclass=ABCMeta):
             logger.info(f"push task {task_id} to {worker.id()}")
         return {'worker': worker.id(), 'ok': oks}
 
-    def push_tasks(self, task_id_storages: dict[str, Path]) -> Error:
+    def push_tasks(self, task_id_storages: dict[str, Any]) -> Error:
         if len(task_id_storages) == 0:
             return OK
         to_push = {}
         for worker, free_num in self.free_workers().items():
-            _todos: [tuple[str, str]] = []
+            task_and_storage: [tuple[Task, str]] = []
             for i in range(free_num):
                 task_id, task_storage = task_id_storages.popitem()
 
                 if self.is_pushed(task_id):
                     continue
 
-                if not worker.get_the_task(task_id).is_init():
+                task = worker.get_the_task(task_id)
+                if not task.is_init():
                     continue
 
-                _todos.append((task_id, task_storage))
-            to_push[worker] = _todos
+                task_and_storage.append((task, task_storage))
+            to_push[worker] = task_and_storage
 
-        futures = [self._thread_pool.submit(self._push_to_worker, worker, _todos)
-                   for worker, _todos in to_push.items()]
+        futures = [self._thread_pool.submit(self._push_to_worker, worker, task_and_storage)
+                   for worker, task_and_storage in to_push.items()]
         [future.result() for future in futures]
         return OK
 
-    def _pull_from_worker(self, worker: Worker, task_ids: [str], local_dir: str):
+    def _pull_from_worker(self, worker: Worker, task_id_storages: dict[str, Any]):
         ok_ids = []
-        for task_id in task_ids:
-            if not worker.get_the_task(task_id).is_success():
+        worker_id = worker.id()
+        for task in worker.get_success_tasks():
+            task_id = task.id()
+            task_storage = task_id_storages.get(task_id)
+            if not task_storage:
+                logger.error(f'pull task {task_id} from {worker_id} no storage')
                 continue
 
-            err = worker.pull_task(task_id, local_dir)
+            err = worker.pull_task(task, task_storage)
             if not err.ok:
                 logger.error(f'pull task {task_id} {err}')
                 continue
-            logger.info(f"pull task {task_id} from {worker.id()}")
+            logger.info(f"pull task {task_id} from {worker_id}")
 
-            self.record_pulled_worker_task(task_id, worker.id())
+            self.record_pulled_worker_task(task_id, worker_id)
             ok_ids.append(task_id)
         return ok_ids
 
-    def pull_tasks(self, local_dir: str) -> [str, Error]:
+    def pull_tasks(self, task_id_storages: dict[str, Any]) -> [str, Error]:
         futures = []
-        for worker_id, task_ids in self.get_to_pulls().items():
-            worker = self.get_the_worker(worker_id)
-            futures.append(self._thread_pool.submit(self._pull_from_worker, worker, task_ids, local_dir))
+        for worker in self.all_workers().values():
+            futures.append(self._thread_pool.submit(self._pull_from_worker, worker, task_id_storages))
 
         ok_ids = []
         [ok_ids.extend(future.result()) for future in futures]
         return ok_ids, OK
 
-    def start(self, local_dir: str, task_id_storages: dict[str, Path]) -> Error:
+    def start(self, to_pull_task_id_storages: dict[str, Any], to_push_task_id_storages: dict[str, Any]) -> Error:
         from common_tool.server import MultiM
 
-        def push(_tasks):
+        def push(task_id_storages):
             while True:
-                if len(_tasks) == 0:
+                if len(task_id_storages) == 0:
                     logger.info(f'all task done')
                     break
-                self.push_tasks(_tasks)
+                self.push_tasks(task_id_storages)
                 time.sleep(3)
-        MultiM.add_p('proxy_push_task', push, task_id_storages)
+        MultiM.add_p('proxy_push_task', push, to_push_task_id_storages)
 
-        def pull(_local_dir):
+        def pull(task_id_storages):
             while True:
-                self.pull_tasks(_local_dir)
+                self.pull_tasks(task_id_storages)
                 time.sleep(3)
-        MultiM.add_p('proxy_pull_task', pull, local_dir)
+        MultiM.add_p('proxy_pull_task', pull, to_pull_task_id_storages)
         return OK
 
     def close(self):

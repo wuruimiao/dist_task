@@ -3,9 +3,9 @@ import math
 import time
 from abc import ABCMeta, abstractmethod
 from multiprocessing import Pool
-from pathlib import Path
+from typing import Any
 
-from common_tool.errno import Error, OK
+from common_tool.errno import Error
 from common_tool.log import logger
 
 from dist_task.abstract.task import Task, TaskStatus
@@ -31,30 +31,24 @@ class Worker(metaclass=ABCMeta):
         self._concurrency = num
 
     @abstractmethod
-    def upload_task(self, task_dir: Path) -> Error:
-        pass
-
-    @abstractmethod
     def get_the_task(self, task_id) -> Task:
         pass
 
     @abstractmethod
-    def do_pull_task(self, task: Task, local_dir) -> Error:
+    def do_pull_task(self, task: Task, storage: Any) -> Error:
         pass
 
     @abstractmethod
     def do_push_task(self, task: Task) -> Error:
         pass
 
-    def pull_task(self, task_id: str, local_dir) -> Error:
-        task = self.get_the_task(task_id)
-        err = self.do_pull_task(task, local_dir)
+    def pull_task(self, task: Task, storage: Any) -> Error:
+        err = self.do_pull_task(task, storage)
         if not err.ok:
             return err
         return task.done()
 
-    def push_task(self, task_id: str) -> Error:
-        task = self.get_the_task(task_id)
+    def push_task(self, task: Task) -> Error:
         err = self.do_push_task(task)
         if not err.ok:
             return err
@@ -81,6 +75,10 @@ class Worker(metaclass=ABCMeta):
 
     @abstractmethod
     def get_done_tasks(self) -> [Task]:
+        pass
+
+    @abstractmethod
+    def get_success_tasks(self) -> [Task]:
         pass
 
     def handle_task(self, task: Task) -> Error:
