@@ -132,5 +132,6 @@ class FileWorker(Worker):
     def get_done_tasks(self):
         return [task for tasks in self._get_all_tasks().values() for task in tasks if task.is_done()]
 
-    def get_success_tasks(self) -> [Task]:
-        return [task for tasks in self._get_all_tasks().values() for task in tasks if task.is_success()]
+    def get_to_pull_tasks(self) -> [Task]:
+        return [task for storage, tasks in self._get_all_tasks().items() for task in tasks
+                if task.is_success() and storage.pull]

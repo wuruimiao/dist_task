@@ -66,7 +66,7 @@ class Proxy(metaclass=ABCMeta):
     def _pull_from_worker(self, worker: Worker, task_id_storages: dict[str, Any]):
         ok_ids = []
         worker_id = worker.id()
-        for task in worker.get_success_tasks():
+        for task in worker.get_to_pull_tasks():
             task_id = task.id()
             task_storage = task_id_storages.get(task_id)
             if not task_storage:

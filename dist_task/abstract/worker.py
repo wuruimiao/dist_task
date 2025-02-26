@@ -80,7 +80,7 @@ class Worker(metaclass=ABCMeta):
         pass
 
     @abstractmethod
-    def get_success_tasks(self) -> [Task]:
+    def get_to_pull_tasks(self) -> [Task]:
         pass
 
     def _do(self, task: Task) -> Error:
