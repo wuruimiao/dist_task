@@ -13,8 +13,8 @@ class FileProxy(Proxy):
         self._done_dir = done_dir
 
     def is_pushed(self, task_id) -> bool:
-        futures = [self._thread_pool.submit(worker.get_the_task, task_id) for worker in self.all_workers().values()]
-        tasks = {future.result() for future in futures}
+        tasks = self._thread_pool.map(lambda worker: worker.get_the_task(task_id), self.all_workers().values())
+        tasks = set(tasks)
         if None in tasks:
             tasks.remove(None)
         return len(tasks) > 0

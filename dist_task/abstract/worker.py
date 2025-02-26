@@ -23,6 +23,12 @@ class Worker(metaclass=ABCMeta):
     def id(self) -> str:
         pass
 
+    def __str__(self):
+        return self.id()
+
+    def __repr__(self):
+        return self.id()
+
     @abstractmethod
     def is_remote(self) -> bool:
         pass
@@ -38,7 +44,7 @@ class Worker(metaclass=ABCMeta):
         self._free = num
 
     @abstractmethod
-    def get_the_task(self, task_id) -> Optional[Task]:
+    def get_the_task(self, task_id: str) -> Optional[Task]:
         pass
 
     @abstractmethod
@@ -61,11 +67,11 @@ class Worker(metaclass=ABCMeta):
             return err
         return task.todo()
 
-    def get_task_status(self, task_id: str) -> TaskStatus:
-        task = self.get_the_task(task_id)
-        if not task:
-            return INIT
-        return task.status()
+    # def get_task_status(self, task_id: str) -> TaskStatus:
+    #     task = self.get_the_task(task_id)
+    #     if not task:
+    #         return INIT
+    #     return task.status()
 
     @abstractmethod
     def get_unfinished_id(self) -> [str]:

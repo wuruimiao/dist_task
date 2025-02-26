@@ -51,7 +51,7 @@ class FileWorker(Worker):
     def _make_task(self, task_id: str, storage: FileStorage) -> FileTask:
         return FileTask(task_id, storage.task_dir, storage.status_dir, self._host)
 
-    def get_the_task(self, task_id) -> Optional[FileTask]:
+    def get_the_task(self, task_id: str) -> Optional[FileTask]:
         for storage in self._storages:
             task = self._make_task(task_id, storage)
             if not task.is_init():

@@ -12,7 +12,7 @@ from dist_task.abstract.task import Task
 
 class Proxy(metaclass=ABCMeta):
     _workers: dict[str, Worker] = {}
-    _thread_pool: ThreadPoolExecutor = ThreadPoolExecutor(max_workers=20)
+    _thread_pool: ThreadPoolExecutor = None
 
     def set_workers(self, workers: [Worker]):
         self._workers = {worker.id(): worker for worker in workers}
@@ -30,6 +30,7 @@ class Proxy(metaclass=ABCMeta):
     def _push_to_worker(self, worker, task_id_storage: [tuple[str, str]]):
         oks = []
         for task_id, task_storage in task_id_storage:
+            logger.info(f'start push {task_id} to {worker.id()}')
             err = worker.push_task(task_id, task_storage)
             if not err.ok:
                 logger.error(f'push task {task_id} {task_storage} {err}')
@@ -37,30 +38,35 @@ class Proxy(metaclass=ABCMeta):
 
             self.record_pushed_worker_task(task_id, worker.id())
             oks.append(task_id)
-            logger.info(f"push task {task_id} to {worker.id()}")
+            logger.info(f"end push {task_id} to {worker.id()}")
         return {'worker': worker.id(), 'ok': oks}
 
     def push_tasks(self, task_id_storages: dict[str, Any]) -> Error:
         if len(task_id_storages) == 0:
             return OK
-        to_push = {}
+
+        to_push = []
         for worker, free_num in self.free_workers().items():
             task_and_storage: [tuple[str, str]] = []
             for i in range(free_num):
+                if len(task_id_storages) == 0:
+                    logger.info(f'push task all pushed')
+                    break
                 task_id, task_storage = task_id_storages.popitem()
 
                 if self.is_pushed(task_id):
-                    continue
-
-                if worker.get_the_task(task_id):
+                    logger.info(f'push ignore task {task_id} pushed')
                     continue
 
                 task_and_storage.append((task_id, task_storage))
-            to_push[worker] = task_and_storage
 
-        futures = [self._thread_pool.submit(self._push_to_worker, worker, task_id_storage)
-                   for worker, task_id_storage in to_push.items()]
-        [future.result() for future in futures]
+            if len(task_and_storage) > 0:
+                to_push.append((worker, task_and_storage))
+
+        to_push_count = {worker: len(tasks) for worker, tasks in to_push}
+        logger.info(f'start push {to_push_count}')
+        self._thread_pool.map(lambda p: self._push_to_worker(*p), to_push)
+        logger.info(f'end push {to_push_count}')
         return OK
 
     def _pull_from_worker(self, worker: Worker, task_id_storages: dict[str, Any]):
@@ -84,39 +90,34 @@ class Proxy(metaclass=ABCMeta):
         return ok_ids
 
     def pull_tasks(self, task_id_storages: dict[str, Any]) -> [str, Error]:
-        futures = []
-        for worker in self.all_workers().values():
-            futures.append(self._thread_pool.submit(self._pull_from_worker, worker, task_id_storages))
-
-        ok_ids = []
-        [ok_ids.extend(future.result()) for future in futures]
-        return ok_ids, OK
+        ok_ids = self._thread_pool.map(lambda worker: self._pull_from_worker(worker, task_id_storages),
+                                       self.all_workers().values())
+        return list(ok_ids), OK
 
     def start(self, to_pull_task_id_storages: dict[str, Any], to_push_task_id_storages: dict[str, Any]) -> Error:
         from common_tool.server import MultiM
 
         def push(task_id_storages):
-            while True:
-                if len(task_id_storages) == 0:
-                    logger.info(f'all task done')
-                    break
-                self.push_tasks(task_id_storages)
-                time.sleep(3)
+            with ThreadPoolExecutor(max_workers=30) as executor:
+                self._thread_pool = executor
+                while True:
+                    if len(task_id_storages) == 0:
+                        logger.info(f'all task done')
+                        return
+                    self.push_tasks(task_id_storages)
+                    time.sleep(3)
+
         MultiM.add_p('proxy_push_task', push, to_push_task_id_storages)
 
         def pull(task_id_storages):
-            while True:
-                self.pull_tasks(task_id_storages)
-                time.sleep(3)
+            with ThreadPoolExecutor(max_workers=30) as executor:
+                self._thread_pool = executor
+                while True:
+                    self.pull_tasks(task_id_storages)
+                    time.sleep(3)
+
         MultiM.add_p('proxy_pull_task', pull, to_pull_task_id_storages)
         return OK
-
-    def close(self):
-        """
-        在 Proxy 实例销毁时，清理线程池。
-        """
-        if self._thread_pool:
-            self._thread_pool.shutdown(wait=True)
 
     @abstractmethod
     def is_pushed(self, task_id) -> bool:
