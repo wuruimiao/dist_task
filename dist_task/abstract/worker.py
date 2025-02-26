@@ -120,7 +120,8 @@ class Worker(metaclass=ABCMeta):
 
     def start(self, auto_clean=False):
         logger.info(f'start with {self._concurrency} concurrent')
-        # TODO: 避免重复apply_async
+        async_results = set()
+
         with Manager() as manager:
             ing_num = manager.Value('i', 0)
             lock = manager.Lock()
@@ -133,19 +134,22 @@ class Worker(metaclass=ABCMeta):
                     limit = self._concurrency - ing_num.value
                     if limit > 0:
                         logger.info(f'start get {limit} todo and handle')
-                    todos = self.get_todo_tasks(limit)
-                    if todos:
-                        logger.info(f'start push {len(todos)} to handle')
-                        for task in todos:
-                            pool.apply_async(self.handle_task, args=(task, ing_num, lock))
-
-                    # TODO: 等待至少一个任务返回，说明有空余空间
+                        todos = self.get_todo_tasks(limit)
+                        if todos:
+                            logger.info(f'start push {len(todos)} to handle')
+                            for task in todos:
+                                async_results.add(pool.apply_async(self.handle_task, args=(task, ing_num, lock)))
 
                     if auto_clean:
                         for task in self.get_done_tasks():
                             task.clean()
 
-                    time.sleep(1)
+                    while True:
+                        readies = {result for result in async_results if result.ready()}
+                        async_results -= readies
+                        if len(readies) > 0:
+                            break
+                        time.sleep(0.5)
 
 
 def handler(position=0):
