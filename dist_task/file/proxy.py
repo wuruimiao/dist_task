@@ -4,7 +4,8 @@ from common_tool.errno import Error, OK
 from common_tool.file import append_f_line
 
 from dist_task.abstract.proxy import Proxy
-from dist_task.file import FileWorker, FileTask
+from dist_task.file.worker import FileWorker
+from dist_task.file.task import FileTask
 
 
 class FileProxy(Proxy):
