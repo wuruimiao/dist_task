@@ -14,6 +14,7 @@ from dist_task.abstract.task import Task, TaskStatus, INIT
 class Worker(metaclass=ABCMeta):
     _handlers = []
     _concurrency = 1
+    _free = 2
 
     @abstractmethod
     def id(self) -> str:
@@ -27,8 +28,11 @@ class Worker(metaclass=ABCMeta):
     def set_handler(cls, func, position=0):
         cls._handlers.insert(position, func)
 
-    def set_con(self, num=1):
+    def set_con(self, num: int):
         self._concurrency = num
+
+    def set_free(self, num: int):
+        self._free = num
 
     @abstractmethod
     def get_the_task(self, task_id) -> Optional[Task]:
@@ -65,7 +69,7 @@ class Worker(metaclass=ABCMeta):
         pass
 
     def free_num(self) -> int:
-        return max(0, math.ceil(self._concurrency * 1.5 - len(self.get_unfinished_id())))
+        return max(0, math.ceil(self._free - len(self.get_unfinished_id())))
 
     @abstractmethod
     def get_ing_tasks(self) -> [Task]:

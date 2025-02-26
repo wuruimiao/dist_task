@@ -26,10 +26,11 @@ class FileStorage:
 
 class FileWorker(Worker):
 
-    def __init__(self, host: str, con: int, storages: [FileStorage]):
+    def __init__(self, host: str, con: int, free: int, storages: [FileStorage]):
         self._storages = storages
         self._host = host
         self.set_con(con)
+        self.set_free(free)
 
     def set_local(self):
         self._host = 'local'
