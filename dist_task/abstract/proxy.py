@@ -27,11 +27,10 @@ class Proxy(metaclass=ABCMeta):
     def get_the_worker(self, worker_id: str) -> Worker:
         return self._workers.get(worker_id)
 
-    def _push_to_worker(self, worker, task_and_storage: [tuple[Task, str]]):
+    def _push_to_worker(self, worker, task_id_storage: [tuple[str, str]]):
         oks = []
-        for task, task_storage in task_and_storage:
-            task_id = task.id()
-            err = worker.push_task(task, task_storage)
+        for task_id, task_storage in task_id_storage:
+            err = worker.push_task(task_id, task_storage)
             if not err.ok:
                 logger.error(f'push task {task_id} {task_storage} {err}')
                 continue
@@ -46,22 +45,21 @@ class Proxy(metaclass=ABCMeta):
             return OK
         to_push = {}
         for worker, free_num in self.free_workers().items():
-            task_and_storage: [tuple[Task, str]] = []
+            task_and_storage: [tuple[str, str]] = []
             for i in range(free_num):
                 task_id, task_storage = task_id_storages.popitem()
 
                 if self.is_pushed(task_id):
                     continue
 
-                task = worker.get_the_task(task_id)
-                if not task.is_init():
+                if worker.get_the_task(task_id):
                     continue
 
-                task_and_storage.append((task, task_storage))
+                task_and_storage.append((task_id, task_storage))
             to_push[worker] = task_and_storage
 
-        futures = [self._thread_pool.submit(self._push_to_worker, worker, task_and_storage)
-                   for worker, task_and_storage in to_push.items()]
+        futures = [self._thread_pool.submit(self._push_to_worker, worker, task_id_storage)
+                   for worker, task_id_storage in to_push.items()]
         [future.result() for future in futures]
         return OK
 

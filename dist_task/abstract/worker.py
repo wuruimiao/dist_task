@@ -3,12 +3,12 @@ import math
 import time
 from abc import ABCMeta, abstractmethod
 from multiprocessing import Pool, Value
-from typing import Any
+from typing import Any, Optional
 
 from common_tool.errno import Error
 from common_tool.log import logger
 
-from dist_task.abstract.task import Task, TaskStatus
+from dist_task.abstract.task import Task, TaskStatus, INIT
 
 
 class Worker(metaclass=ABCMeta):
@@ -31,7 +31,7 @@ class Worker(metaclass=ABCMeta):
         self._concurrency = num
 
     @abstractmethod
-    def get_the_task(self, task_id) -> Task:
+    def get_the_task(self, task_id) -> Optional[Task]:
         pass
 
     @abstractmethod
@@ -39,7 +39,7 @@ class Worker(metaclass=ABCMeta):
         pass
 
     @abstractmethod
-    def do_push_task(self, task: Task, task_storage: Any) -> Error:
+    def do_push_task(self, task_id: id, task_storage: Any) -> tuple[Task, Error]:
         pass
 
     def pull_task(self, task: Task, storage: Any) -> Error:
@@ -48,14 +48,16 @@ class Worker(metaclass=ABCMeta):
             return err
         return task.done()
 
-    def push_task(self, task: Task, task_storage: Any) -> Error:
-        err = self.do_push_task(task, task_storage)
+    def push_task(self, task_id: str, task_storage: Any) -> Error:
+        task, err = self.do_push_task(task_id, task_storage)
         if not err.ok:
             return err
         return task.todo()
 
     def get_task_status(self, task_id: str) -> TaskStatus:
         task = self.get_the_task(task_id)
+        if not task:
+            return INIT
         return task.status()
 
     @abstractmethod
