@@ -17,7 +17,7 @@ SYNC = Error(5555, 'sync fail', 'sync同步失败')
 NO_FILE = Error(6666, 'no file', 'sync同步没有文件')
 
 
-class Storage:
+class FileStorage:
     def __init__(self, status_dir: str, task_dir: str, pull: bool):
         self.status_dir = Path(status_dir)
         self.task_dir = Path(task_dir)
@@ -26,7 +26,7 @@ class Storage:
 
 class FileWorker(Worker):
 
-    def __init__(self, host: str, con: int, storages: [Storage]):
+    def __init__(self, host: str, con: int, storages: [FileStorage]):
         self._storages = storages
         self._host = host
         self.set_con(con)
@@ -47,7 +47,7 @@ class FileWorker(Worker):
     def id(self) -> str:
         return self._host
 
-    def _make_task(self, task_id: str, storage: Storage) -> FileTask:
+    def _make_task(self, task_id: str, storage: FileStorage) -> FileTask:
         return FileTask(task_id, storage.task_dir, storage.status_dir, self._host)
 
     def get_the_task(self, task_id) -> Optional[FileTask]:
@@ -57,7 +57,7 @@ class FileWorker(Worker):
                 return task
         return None
 
-    def _get_storage_unfinished_id(self) -> dict[Storage, list[str]]:
+    def _get_storage_unfinished_id(self) -> dict[FileStorage, list[str]]:
         return OrderedDict([
             (storage, [task.id() for task in tasks if task.is_ing() or task.is_todo()])
             for storage, tasks in self._get_all_tasks().items()
@@ -92,7 +92,7 @@ class FileWorker(Worker):
         [task_ids.extend(ids) for ids in self._get_storage_unfinished_id().values()]
         return task_ids
 
-    def _get_all_tasks(self) -> dict[Storage, list[FileTask]]:
+    def _get_all_tasks(self) -> dict[FileStorage, list[FileTask]]:
         tasks = OrderedDict()
         for storage in self._storages:
             files, _ = list_dir(self.is_remote(), self._host, USER, storage.status_dir)
