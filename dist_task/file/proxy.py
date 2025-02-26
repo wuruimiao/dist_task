@@ -23,8 +23,11 @@ class FileProxy(Proxy):
         worker: FileWorker
         futures = {worker: self._thread_pool.submit(worker.get_all_tasks)
                    for worker in self.all_workers().values()}
-        return {worker: [task for _, tasks in future.result() for task in tasks]
-                for worker, future in futures.items()}
+        futures = {worker: future.result() for worker, future in futures.items()}
+        return {
+            worker: [task for tasks in storage_tasks.values() for task in tasks]
+            for worker, storage_tasks in futures.items()
+        }
 
     def record_pushed_worker_task(self, task_id: str, worker_id: str) -> Error:
         return OK
