@@ -2,7 +2,7 @@ import functools
 import math
 import time
 from abc import ABCMeta, abstractmethod
-from multiprocessing import Pool
+from multiprocessing import Pool, Value
 from typing import Any
 
 from common_tool.errno import Error
@@ -39,7 +39,7 @@ class Worker(metaclass=ABCMeta):
         pass
 
     @abstractmethod
-    def do_push_task(self, task: Task) -> Error:
+    def do_push_task(self, task: Task, task_storage: Any) -> Error:
         pass
 
     def pull_task(self, task: Task, storage: Any) -> Error:
@@ -48,8 +48,8 @@ class Worker(metaclass=ABCMeta):
             return err
         return task.done()
 
-    def push_task(self, task: Task) -> Error:
-        err = self.do_push_task(task)
+    def push_task(self, task: Task, task_storage: Any) -> Error:
+        err = self.do_push_task(task, task_storage)
         if not err.ok:
             return err
         return task.todo()
@@ -70,7 +70,7 @@ class Worker(metaclass=ABCMeta):
         pass
 
     @abstractmethod
-    def get_todo_tasks(self) -> [Task]:
+    def get_todo_tasks(self, limit: int) -> [Task]:
         pass
 
     @abstractmethod
@@ -81,7 +81,7 @@ class Worker(metaclass=ABCMeta):
     def get_success_tasks(self) -> [Task]:
         pass
 
-    def handle_task(self, task: Task) -> Error:
+    def _do(self, task: Task) -> Error:
         logger.info(f"start handle task {task.id()} {len(self._handlers)} {self._concurrency}")
         err: Error
         err = task.ing()
@@ -98,14 +98,23 @@ class Worker(metaclass=ABCMeta):
         logger.info(f'end handle task {task.id()}')
         return task.success()
 
+    def handle_task(self, task: Task, ing_num: Value) -> Error:
+        with ing_num.get_lock():
+            ing_num.value += 1
+        err = self._do(task)
+        with ing_num.get_lock():
+            ing_num.value += 1
+        return err
+
     def start(self, auto_clean=False):
+        ing_num = Value('i', 0)
         with Pool(processes=self._concurrency) as pool:
             for task in self.get_ing_tasks():
                 task.todo(force=True)
 
             while True:
-                for task in self.get_todo_tasks():
-                    pool.apply_async(self.handle_task, args=(task,))
+                for task in self.get_todo_tasks(self._concurrency - ing_num.value):
+                    pool.apply_async(self.handle_task, args=(task, ing_num))
                 if auto_clean:
                     for task in self.get_done_tasks():
                         task.clean()

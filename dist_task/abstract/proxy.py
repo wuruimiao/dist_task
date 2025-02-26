@@ -31,12 +31,7 @@ class Proxy(metaclass=ABCMeta):
         oks = []
         for task, task_storage in task_and_storage:
             task_id = task.id()
-            err = worker.upload_task(task_storage)
-            if not err.ok:
-                logger.error(f'push task {task_id} {task_storage} {err}')
-                continue
-
-            err = worker.push_task(task)
+            err = worker.push_task(task, task_storage)
             if not err.ok:
                 logger.error(f'push task {task_id} {task_storage} {err}')
                 continue
@@ -135,8 +130,4 @@ class Proxy(metaclass=ABCMeta):
 
     @abstractmethod
     def record_pulled_worker_task(self, task_id: str, worker_id: str) -> Error:
-        pass
-
-    @abstractmethod
-    def get_to_pulls(self) -> dict[str, set[str]]:
         pass
