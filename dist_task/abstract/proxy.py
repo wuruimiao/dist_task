@@ -123,6 +123,10 @@ class Proxy(metaclass=ABCMeta):
         pass
 
     @abstractmethod
+    def all_pushed(self) -> dict[Worker, list[Task]]:
+        pass
+
+    @abstractmethod
     def record_pushed_worker_task(self, task, worker_id) -> Error:
         pass
 

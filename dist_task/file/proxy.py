@@ -4,6 +4,7 @@ from common_tool.errno import Error, OK
 from common_tool.file import append_f_line
 
 from dist_task.abstract.proxy import Proxy
+from dist_task.file import FileWorker, FileTask
 
 
 class FileProxy(Proxy):
@@ -12,10 +13,17 @@ class FileProxy(Proxy):
 
     def is_pushed(self, task_id) -> bool:
         futures = [self._thread_pool.submit(worker.get_the_task, task_id) for worker in self.all_workers().values()]
-        statuses = {future.result() for future in futures}
-        if None in statuses:
-            statuses.remove(None)
-        return len(statuses) > 0
+        tasks = {future.result() for future in futures}
+        if None in tasks:
+            tasks.remove(None)
+        return len(tasks) > 0
+
+    def all_pushed(self) -> dict[FileWorker, list[FileTask]]:
+        worker: FileWorker
+        futures = {worker: self._thread_pool.submit(worker.get_all_tasks)
+                   for worker in self.all_workers().values()}
+        return {worker: [task for _, tasks in future.result() for task in tasks]
+                for worker, future in futures.items()}
 
     def record_pushed_worker_task(self, task_id: str, worker_id: str) -> Error:
         return OK

@@ -88,42 +88,49 @@ class Worker(metaclass=ABCMeta):
         pass
 
     def _do(self, task: Task) -> Error:
-        logger.info(f"start handle task {task.id()} {len(self._handlers)} {self._concurrency}")
         err: Error
         err = task.ing()
         if not err.ok:
-            logger.error(f'status handle task {task.id()} {err}')
             return err
 
         for handle in self._handlers:
             err = handle(task)
             if not err.ok:
-                logger.error(f'do handle task {task.id()} {err}')
                 task.fail()
                 return err
-        logger.info(f'end handle task {task.id()}')
         return task.success()
 
     def handle_task(self, task: Task, ing_num: Value) -> Error:
+        logger.info(f"start handle task {task.id()} {len(self._handlers)} {self._concurrency}")
         with ing_num.get_lock():
             ing_num.value += 1
         err = self._do(task)
         with ing_num.get_lock():
             ing_num.value += 1
+        logger.info(f'end handle task {task.id()} {err}')
         return err
 
     def start(self, auto_clean=False):
         ing_num = Value('i', 0)
+        logger.info(f'start with {self._concurrency} concurrent')
         with Pool(processes=self._concurrency) as pool:
             for task in self.get_ing_tasks():
                 task.todo(force=True)
 
             while True:
-                for task in self.get_todo_tasks(self._concurrency - ing_num.value):
-                    pool.apply_async(self.handle_task, args=(task, ing_num))
+                limit = self._concurrency - ing_num.value
+                if limit > 0:
+                    logger.info(f'start get {limit} todo and handle')
+                todos = self.get_todo_tasks(limit)
+                if todos:
+                    logger.info(f'start push {len(todos)} to handle')
+                    for task in todos:
+                        pool.apply_async(self.handle_task, args=(task, ing_num))
+
                 if auto_clean:
                     for task in self.get_done_tasks():
                         task.clean()
+
                 time.sleep(1)
 
 

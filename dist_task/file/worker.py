@@ -61,7 +61,7 @@ class FileWorker(Worker):
     def _get_storage_unfinished_id(self) -> dict[FileStorage, list[str]]:
         return OrderedDict([
             (storage, [task.id() for task in tasks if task.is_ing() or task.is_todo()])
-            for storage, tasks in self._get_all_tasks().items()
+            for storage, tasks in self.get_all_tasks().items()
         ])
 
     def do_push_task(self, task_id: str, task_storage: Path) -> tuple[FileTask, Error]:
@@ -93,7 +93,7 @@ class FileWorker(Worker):
         [task_ids.extend(ids) for ids in self._get_storage_unfinished_id().values()]
         return task_ids
 
-    def _get_all_tasks(self) -> dict[FileStorage, list[FileTask]]:
+    def get_all_tasks(self) -> dict[FileStorage, list[FileTask]]:
         tasks = OrderedDict()
         for storage in self._storages:
             files, _ = list_dir(self.is_remote(), self._host, USER, storage.status_dir)
@@ -101,7 +101,7 @@ class FileWorker(Worker):
         return tasks
 
     def get_ing_tasks(self) -> [Task]:
-        return [task for tasks in self._get_all_tasks().values() for task in tasks if task.is_ing()]
+        return [task for tasks in self.get_all_tasks().values() for task in tasks if task.is_ing()]
 
     @staticmethod
     def _balanced_selection(arr: [[]], limit: int):
@@ -126,13 +126,13 @@ class FileWorker(Worker):
     def get_todo_tasks(self, limit: int) -> [Task]:
         if limit <= 0:
             return []
-        all_todos = [[task for task in tasks if task.is_todo()] for tasks in self._get_all_tasks().values()]
+        all_todos = [[task for task in tasks if task.is_todo()] for tasks in self.get_all_tasks().values()]
         all_todos = [tasks for tasks in all_todos if len(tasks) > 0]
         return self._balanced_selection(all_todos, limit)
 
     def get_done_tasks(self):
-        return [task for tasks in self._get_all_tasks().values() for task in tasks if task.is_done()]
+        return [task for tasks in self.get_all_tasks().values() for task in tasks if task.is_done()]
 
     def get_to_pull_tasks(self) -> [Task]:
-        return [task for storage, tasks in self._get_all_tasks().items() for task in tasks
+        return [task for storage, tasks in self.get_all_tasks().items() for task in tasks
                 if task.is_success() and storage.pull]
