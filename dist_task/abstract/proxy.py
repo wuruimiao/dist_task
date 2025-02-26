@@ -33,7 +33,7 @@ class Proxy(metaclass=ABCMeta):
             logger.info(f'start push {task_id} to {worker.id()}')
             err = worker.push_task(task_id, task_storage)
             if not err.ok:
-                logger.error(f'push task {task_id} {task_storage} {err}')
+                logger.error(f'push err {task_id} {task_storage} {err}')
                 continue
 
             self.record_pushed_worker_task(task_id, worker.id())
@@ -48,7 +48,7 @@ class Proxy(metaclass=ABCMeta):
         to_push = []
         for worker, free_num in self.free_workers().items():
             task_and_storage: [tuple[str, str]] = []
-            for i in range(free_num):
+            while free_num > 0:
                 if len(task_id_storages) == 0:
                     logger.info(f'push task all pushed')
                     break
@@ -58,15 +58,15 @@ class Proxy(metaclass=ABCMeta):
                     logger.info(f'push ignore task {task_id} pushed')
                     continue
 
+                free_num -= 1
                 task_and_storage.append((task_id, task_storage))
 
             if len(task_and_storage) > 0:
                 to_push.append((worker, task_and_storage))
 
-        to_push_count = {worker: len(tasks) for worker, tasks in to_push}
-        logger.info(f'start push {to_push_count}')
+        logger.info(f'start push {to_push}')
         self._thread_pool.map(lambda p: self._push_to_worker(*p), to_push)
-        logger.info(f'end push {to_push_count}')
+        logger.info(f'end push {to_push}')
         return OK
 
     def _pull_from_worker(self, worker: Worker, task_id_storages: dict[str, Any]):

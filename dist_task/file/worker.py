@@ -68,9 +68,7 @@ class FileWorker(Worker):
         storage_unfinished = self._get_storage_unfinished_id()
         storage = min(storage_unfinished, key=lambda key: len(storage_unfinished[key]))
 
-        logger.info(f'start upload {task_storage} to {self.id()}')
         ok = self._sync(str(task_storage), str(storage.task_dir))
-        logger.info(f'end upload {task_storage} to {self.id()} {ok}')
 
         task = self._make_task(task_id, storage)
         if not ok:
