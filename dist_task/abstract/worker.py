@@ -1,14 +1,17 @@
 import functools
 import math
 import time
+import traceback
 from abc import ABCMeta, abstractmethod
-from multiprocessing import Pool, Value
+from multiprocessing import Pool, Manager
 from typing import Any, Optional
 
 from common_tool.errno import Error
 from common_tool.log import logger
 
 from dist_task.abstract.task import Task, TaskStatus, INIT
+
+_DO = Error(7777, 'handle task', '任务执行异常')
 
 
 class Worker(metaclass=ABCMeta):
@@ -100,38 +103,47 @@ class Worker(metaclass=ABCMeta):
                 return err
         return task.success()
 
-    def handle_task(self, task: Task, ing_num: Value) -> Error:
-        logger.info(f"start handle task {task.id()} {len(self._handlers)} {self._concurrency}")
-        with ing_num.get_lock():
-            ing_num.value += 1
-        err = self._do(task)
-        with ing_num.get_lock():
-            ing_num.value += 1
-        logger.info(f'end handle task {task.id()} {err}')
+    def handle_task(self, task: Task, ing_num, lock) -> Error:
+        logger.info(f"start handle task {task.id()} handler num: {len(self._handlers)}")
+        err = _DO
+        try:
+            with lock:
+                ing_num.value += 1
+            err = self._do(task)
+            with lock:
+                ing_num.value -= 1
+        except Exception:
+            logger.error(f'handle task {task.id()} exception: {traceback.format_exc()}')
         return err
 
     def start(self, auto_clean=False):
-        ing_num = Value('i', 0)
         logger.info(f'start with {self._concurrency} concurrent')
-        with Pool(processes=self._concurrency) as pool:
-            for task in self.get_ing_tasks():
-                task.todo(force=True)
+        # TODO: 避免重复apply_async
+        with Manager() as manager:
+            ing_num = manager.Value('i', 0)
+            lock = manager.Lock()
 
-            while True:
-                limit = self._concurrency - ing_num.value
-                if limit > 0:
-                    logger.info(f'start get {limit} todo and handle')
-                todos = self.get_todo_tasks(limit)
-                if todos:
-                    logger.info(f'start push {len(todos)} to handle')
-                    for task in todos:
-                        pool.apply_async(self.handle_task, args=(task, ing_num))
+            with Pool(processes=self._concurrency) as pool:
+                for task in self.get_ing_tasks():
+                    task.todo(force=True)
 
-                if auto_clean:
-                    for task in self.get_done_tasks():
-                        task.clean()
+                while True:
+                    limit = self._concurrency - ing_num.value
+                    if limit > 0:
+                        logger.info(f'start get {limit} todo and handle')
+                    todos = self.get_todo_tasks(limit)
+                    if todos:
+                        logger.info(f'start push {len(todos)} to handle')
+                        for task in todos:
+                            pool.apply_async(self.handle_task, args=(task, ing_num, lock))
 
-                time.sleep(1)
+                    # TODO: 等待至少一个任务返回，说明有空余空间
+
+                    if auto_clean:
+                        for task in self.get_done_tasks():
+                            task.clean()
+
+                    time.sleep(1)
 
 
 def handler(position=0):
