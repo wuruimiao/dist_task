@@ -1,4 +1,5 @@
 import time
+import traceback
 from abc import ABCMeta, abstractmethod
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any
@@ -30,15 +31,16 @@ class Proxy(metaclass=ABCMeta):
     def _push_to_worker(self, worker, task_id_storage: [tuple[str, str]]):
         oks = []
         for task_id, task_storage in task_id_storage:
-            logger.info(f'start push {task_id} to {worker.id()}')
+            logger.info(f'start push {task_id} {task_storage} to {worker}')
             err = worker.push_task(task_id, task_storage)
             if not err.ok:
                 logger.error(f'push err {task_id} {task_storage} {err}')
                 continue
 
-            self.record_pushed_worker_task(task_id, worker.id())
+            self.record_pushed_worker_task(task_id, worker)
             oks.append(task_id)
-            logger.info(f"end push {task_id} to {worker.id()}")
+            logger.info(f"end push {task_id} {task_storage} to {worker}")
+            logger.error(f'exception: {traceback.format_exc()}')
         return {'worker': worker.id(), 'ok': oks}
 
     def push_tasks(self, task_id_storages: dict[str, Any]) -> Error:
@@ -47,7 +49,7 @@ class Proxy(metaclass=ABCMeta):
 
         to_push = []
         for worker, free_num in self.free_workers().items():
-            task_and_storage: [tuple[str, str]] = []
+            task_id_storage: [tuple[str, str]] = []
             while free_num > 0:
                 if len(task_id_storages) == 0:
                     logger.info(f'push task all pushed')
@@ -59,14 +61,16 @@ class Proxy(metaclass=ABCMeta):
                     continue
 
                 free_num -= 1
-                task_and_storage.append((task_id, task_storage))
+                task_id_storage.append((task_id, task_storage))
 
-            if len(task_and_storage) > 0:
-                to_push.append((worker, task_and_storage))
+            if len(task_id_storage) > 0:
+                to_push.append((worker, task_id_storage))
 
-        logger.info(f'start push {to_push}')
-        self._thread_pool.map(lambda p: self._push_to_worker(*p), to_push)
-        logger.info(f'end push {to_push}')
+        # 涉及子进程，.map会立即返回
+        # self._thread_pool.map(lambda p: self._push_to_worker(*p), to_push)
+        futures = [self._thread_pool.submit(self._push_to_worker, worker, task_id_storage)
+                   for worker, task_id_storage in to_push]
+        [future.result() for future in futures]
         return OK
 
     def _pull_from_worker(self, worker: Worker, task_id_storages: dict[str, Any]):
