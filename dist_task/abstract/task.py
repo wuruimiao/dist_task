@@ -26,6 +26,12 @@ class Task(metaclass=ABCMeta):
     def id(self) -> str:
         pass
 
+    def __str__(self):
+        return self.id()
+
+    def __repr__(self):
+        return self.id()
+
     @abstractmethod
     def status(self) -> TaskStatus:
         pass

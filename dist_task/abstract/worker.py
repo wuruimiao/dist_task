@@ -110,7 +110,7 @@ class Worker(metaclass=ABCMeta):
         return task.success()
 
     def handle_task(self, task: Task, ing_num, lock) -> Error:
-        logger.info(f"start handle task {task.id()} handler num: {len(self._handlers)}")
+        logger.info(f"start handle task {task} handler num: {len(self._handlers)}")
         err = _DO
         with lock:
             ing_num.value += 1
@@ -118,7 +118,7 @@ class Worker(metaclass=ABCMeta):
         try:
             err = self._do(task)
         except Exception:
-            logger.error(f'handle task {task.id()} exception: {traceback.format_exc()}')
+            logger.error(f'handle task {task} exception: {traceback.format_exc()}')
 
         with lock:
             ing_num.value -= 1
