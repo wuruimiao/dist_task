@@ -9,20 +9,21 @@ from dist_task.file.task import FileTask
 
 
 class FileProxy(Proxy):
-    def __init__(self, done_dir: Path):
+    def __init__(self, workers: list[FileWorker], done_dir: Path):
+        super().__init__(workers=workers)
         self._done_dir = done_dir
 
     def is_pushed(self, task_id) -> bool:
-        tasks = self._thread_pool.map(lambda worker: worker.get_the_task(task_id), self.all_workers().values())
-        tasks = set(tasks)
+        futures = [self.thread_pool.submit(worker.get_the_task, task_id) for worker in self.workers]
+        tasks = {future.result() for future in futures}
         if None in tasks:
             tasks.remove(None)
         return len(tasks) > 0
 
     def all_pushed(self) -> dict[FileWorker, list[FileTask]]:
         worker: FileWorker
-        futures = {worker: self._thread_pool.submit(worker.get_all_tasks)
-                   for worker in self.all_workers().values()}
+        futures = {worker: self.thread_pool.submit(worker.get_all_tasks)
+                   for worker in self.workers}
         futures = {worker: future.result() for worker, future in futures.items()}
         return {
             worker: [task for tasks in storage_tasks.values() for task in tasks]

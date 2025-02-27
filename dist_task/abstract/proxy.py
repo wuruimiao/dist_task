@@ -3,6 +3,7 @@ import traceback
 from abc import ABCMeta, abstractmethod
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any
+from threading import Lock
 
 from common_tool.errno import Error, OK
 from common_tool.log import logger
@@ -12,21 +13,33 @@ from dist_task.abstract.task import Task
 
 
 class Proxy(metaclass=ABCMeta):
-    _workers: dict[str, Worker] = {}
-    _thread_pool: ThreadPoolExecutor = None
+    def __init__(self, workers: list[Worker]):
+        self._workers = tuple(workers)
+        self._thread_pool = None
+        self._thread_pool_lock = Lock()
 
-    def set_workers(self, workers: [Worker]):
-        self._workers = {worker.id(): worker for worker in workers}
+    @property
+    def thread_pool(self) -> ThreadPoolExecutor:
+        if self._thread_pool:
+            return self._thread_pool
+        with self._thread_pool_lock:
+            if not self._thread_pool:
+                self._thread_pool = ThreadPoolExecutor(max_workers=30)
+            return self._thread_pool
 
-    def free_workers(self) -> dict[Worker, int]:
-        workers = {worker: worker.free_num() for worker in self._workers.values()}
-        return {worker: free_num for worker, free_num in workers.items() if free_num > 0}
-
-    def all_workers(self) -> dict[str, Worker]:
+    @property
+    def workers(self) -> tuple[Worker]:
         return self._workers
 
+    def free_workers(self) -> dict[Worker, int]:
+        workers = {worker: worker.free_num() for worker in self.workers}
+        return {worker: free_num for worker, free_num in workers.items() if free_num > 0}
+
     def get_the_worker(self, worker_id: str) -> Worker:
-        return self._workers.get(worker_id)
+        for worker in self.workers:
+            if worker.id() == worker_id:
+                return worker
+        return None
 
     def _push_to_worker(self, worker, task_id_storage: [tuple[str, str]]):
         oks = []
@@ -68,7 +81,7 @@ class Proxy(metaclass=ABCMeta):
 
         # 涉及子进程，.map会立即返回
         # self._thread_pool.map(lambda p: self._push_to_worker(*p), to_push)
-        futures = [self._thread_pool.submit(self._push_to_worker, worker, task_id_storage)
+        futures = [self.thread_pool.submit(self._push_to_worker, worker, task_id_storage)
                    for worker, task_id_storage in to_push]
         [future.result() for future in futures]
         return OK
@@ -93,32 +106,28 @@ class Proxy(metaclass=ABCMeta):
             ok_ids.append(task_id)
         return ok_ids
 
-    def pull_tasks(self, task_id_storages: dict[str, Any]) -> [str, Error]:
-        ok_ids = self._thread_pool.map(lambda worker: self._pull_from_worker(worker, task_id_storages),
-                                       self.all_workers().values())
-        return list(ok_ids), OK
+    def pull_tasks(self, task_id_storages: dict[str, Any]) -> Error:
+        futures = [self.thread_pool.submit(self._pull_from_worker, worker, task_id_storages) for worker in self.workers]
+        [future.result() for future in futures]
+        return OK
 
     def start(self, to_pull_task_id_storages: dict[str, Any], to_push_task_id_storages: dict[str, Any]) -> Error:
         from common_tool.server import MultiM
 
         def push(task_id_storages):
-            with ThreadPoolExecutor(max_workers=30) as executor:
-                self._thread_pool = executor
-                while True:
-                    if len(task_id_storages) == 0:
-                        logger.info(f'all task done')
-                        return
-                    self.push_tasks(task_id_storages)
-                    time.sleep(3)
+            while True:
+                if len(task_id_storages) == 0:
+                    logger.info(f'all task done')
+                    return
+                self.push_tasks(task_id_storages)
+                time.sleep(3)
 
         MultiM.add_p('proxy_push_task', push, to_push_task_id_storages)
 
         def pull(task_id_storages):
-            with ThreadPoolExecutor(max_workers=30) as executor:
-                self._thread_pool = executor
-                while True:
-                    self.pull_tasks(task_id_storages)
-                    time.sleep(3)
+            while True:
+                self.pull_tasks(task_id_storages)
+                time.sleep(3)
 
         MultiM.add_p('proxy_pull_task', pull, to_pull_task_id_storages)
         return OK
