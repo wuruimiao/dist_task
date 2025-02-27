@@ -110,18 +110,19 @@ class Worker(metaclass=ABCMeta):
         return task.success()
 
     def handle_task(self, task: Task, ing_num, lock) -> Error:
-        logger.info(f"start handle task {task} handler num: {len(self._handlers)}")
+        logger.info(f"start handle task {task.info()} handler num: {len(self._handlers)}")
         err = _DO
-        with lock:
-            ing_num.value += 1
 
         try:
+            with lock:
+                ing_num.value += 1
+            logger.debug(f'start do {task}')
             err = self._do(task)
+            with lock:
+                ing_num.value -= 1
         except Exception:
             logger.error(f'handle task {task} exception: {traceback.format_exc()}')
 
-        with lock:
-            ing_num.value -= 1
         return err
 
     def start(self, auto_clean=False):
@@ -139,10 +140,8 @@ class Worker(metaclass=ABCMeta):
                 while True:
                     limit = self._concurrency - ing_num.value
                     if limit > 0:
-                        logger.info(f'start get {limit} todo and handle')
                         todos = self.get_todo_tasks(limit)
                         if todos:
-                            logger.info(f'start push {len(todos)} to handle')
                             for task in todos:
                                 async_results.add(pool.apply_async(self.handle_task, args=(task, ing_num, lock)))
 

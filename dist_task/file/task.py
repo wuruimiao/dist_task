@@ -29,6 +29,9 @@ class FileTask(Task):
         self._host = host
         self._task_dir = task_dir
 
+    def info(self) -> str:
+        return f'{self.id()} {self._host} {self._task_dir} {self._status_dir}'
+
     def _is_remote(self):
         return is_remote(self._host)
 

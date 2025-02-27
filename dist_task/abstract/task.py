@@ -26,6 +26,10 @@ class Task(metaclass=ABCMeta):
     def id(self) -> str:
         pass
 
+    @abstractmethod
+    def info(self) -> str:
+        pass
+
     def __str__(self):
         return self.id()
 
