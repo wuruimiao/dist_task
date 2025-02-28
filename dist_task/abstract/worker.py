@@ -1,23 +1,42 @@
-import functools
 import math
 import time
 import traceback
 from abc import ABCMeta, abstractmethod
 from multiprocessing import Pool, Manager
-from typing import Any, Optional
+from typing import Any, Optional, Callable
 
 from common_tool.errno import Error
 from common_tool.log import logger
 
-from dist_task.abstract.task import Task, TaskStatus, INIT
+from dist_task.abstract.task import Task
 
 _DO = Error(7777, 'handle task', '任务执行异常')
 
 
 class Worker(metaclass=ABCMeta):
-    _handlers = []
-    _concurrency = 1
-    _free = 2
+    def __init__(self, handlers: list[Callable], con: int, free: int, auto_clean: bool):
+        self._handlers = tuple(handlers)
+        self._concurrency = con
+        if not free:
+            free = con * 1.5
+        self._free = free
+        self._auto_clean = auto_clean
+
+    @property
+    def handlers(self):
+        return self._handlers
+
+    @property
+    def concurrency(self) -> int:
+        return self._concurrency
+
+    @property
+    def free(self) -> int:
+        return self._free
+
+    @property
+    def auto_clean(self) -> bool:
+        return self._auto_clean
 
     @abstractmethod
     def id(self) -> str:
@@ -32,16 +51,6 @@ class Worker(metaclass=ABCMeta):
     @abstractmethod
     def is_remote(self) -> bool:
         pass
-
-    @classmethod
-    def set_handler(cls, func, position=0):
-        cls._handlers.insert(position, func)
-
-    def set_con(self, num: int):
-        self._concurrency = num
-
-    def set_free(self, num: int):
-        self._free = num
 
     @abstractmethod
     def get_the_task(self, task_id: str) -> Optional[Task]:
@@ -78,7 +87,7 @@ class Worker(metaclass=ABCMeta):
         pass
 
     def free_num(self) -> int:
-        return max(0, math.ceil(self._free - len(self.get_unfinished_id())))
+        return max(0, math.ceil(self.free - len(self.get_unfinished_id())))
 
     @abstractmethod
     def get_ing_tasks(self) -> [Task]:
@@ -102,7 +111,7 @@ class Worker(metaclass=ABCMeta):
         if not err.ok:
             return err
 
-        for handle in self._handlers:
+        for handle in self.handlers:
             err = handle(task)
             if not err.ok:
                 task.fail()
@@ -110,7 +119,7 @@ class Worker(metaclass=ABCMeta):
         return task.success()
 
     def handle_task(self, task: Task, ing_num, lock) -> Error:
-        logger.info(f"start handle task {task.info()} handler num: {len(self._handlers)}")
+        logger.info(f"start handle task {task.info()} handler num: {len(self.handlers)}")
         err = _DO
 
         try:
@@ -125,27 +134,27 @@ class Worker(metaclass=ABCMeta):
 
         return err
 
-    def start(self, auto_clean=False):
-        logger.info(f'start with {self._concurrency} concurrent')
+    def start(self):
+        logger.info(f'start with {self.concurrency} concurrent')
         async_results = set()
 
         with Manager() as manager:
             ing_num = manager.Value('i', 0)
             lock = manager.Lock()
 
-            with Pool(processes=self._concurrency) as pool:
+            with Pool(processes=self.concurrency) as pool:
                 for task in self.get_ing_tasks():
                     task.todo(force=True)
 
                 while True:
-                    limit = self._concurrency - ing_num.value
+                    limit = self.concurrency - ing_num.value
                     if limit > 0:
                         todos = self.get_todo_tasks(limit)
                         if todos:
                             for task in todos:
                                 async_results.add(pool.apply_async(self.handle_task, args=(task, ing_num, lock)))
 
-                    if auto_clean:
+                    if self.auto_clean:
                         for task in self.get_done_tasks():
                             task.clean()
 
@@ -155,15 +164,3 @@ class Worker(metaclass=ABCMeta):
                         if len(readies) > 0:
                             break
                         time.sleep(0.5)
-
-
-def handler(position=0):
-    def decorator(func):
-        @functools.wraps(func)
-        def wrapper(*args, **kwargs):
-            Worker.set_handler(func, position)
-            return func(*args, **kwargs)
-
-        return wrapper
-
-    return decorator

@@ -1,7 +1,7 @@
 import math
 from collections import OrderedDict
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Callable
 
 from common_tool.errno import Error, OK
 from common_tool.log import logger
@@ -25,12 +25,11 @@ class FileStorage:
 
 
 class FileWorker(Worker):
-
-    def __init__(self, host: str, con: int, free: int, storages: [FileStorage]):
+    def __init__(self, host: str, con: int, storages: [FileStorage],
+                 handlers: list[Callable], free: int = None, auto_clean: bool = False):
+        super().__init__(handlers=handlers, con=con, free=free, auto_clean=auto_clean)
         self._storages = storages
         self._host = host
-        self.set_con(con)
-        self.set_free(free)
 
     def set_local(self):
         self._host = 'local'
