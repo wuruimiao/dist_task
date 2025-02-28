@@ -42,11 +42,15 @@ class Worker(metaclass=ABCMeta):
     def id(self) -> str:
         pass
 
+    @abstractmethod
+    def info(self) -> str:
+        pass
+
     def __str__(self):
         return self.id()
 
     def __repr__(self):
-        return self.id()
+        return str(self)
 
     @abstractmethod
     def is_remote(self) -> bool:

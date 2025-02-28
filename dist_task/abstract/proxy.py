@@ -53,7 +53,6 @@ class Proxy(metaclass=ABCMeta):
             self.record_pushed_worker_task(task_id, worker)
             oks.append(task_id)
             logger.info(f"end push {task_id} {task_storage} to {worker}")
-            logger.error(f'exception: {traceback.format_exc()}')
         return {'worker': worker.id(), 'ok': oks}
 
     def push_tasks(self, task_id_storages: dict[str, Any]) -> Error:

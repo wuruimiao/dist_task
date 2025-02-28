@@ -61,12 +61,12 @@ class FileTask(Task):
         if not status:
             return INIT
         if len(status) > 1:
-            logger.error(f'task status err {self._id} {status}, will use first status')
+            logger.info(f'notice: task status err {self._id} {status}, will use first status')
         status = {s.suffix.replace('.', '') for s in status}
         for s in [TODO, ING, SUCCESS, FAIL, DONE]:
             if s in status:
                 return s
-        logger.error(f'task status undefined status {status}, will use INIT')
+        # logger.error(f'task status undefined status {status}, will use INIT')
         return INIT
 
     def task_dir(self) -> tuple[Optional[Path], bool]:
