@@ -53,10 +53,10 @@ class FileWorker(Worker):
     def is_remote(self) -> bool:
         return is_remote(self.host)
 
-    def _sync(self, _from, _to, to_remote: bool = True) -> bool:
-        logger.info(f'sync from {_from} to {_to} is_remote={self.is_remote()} to_remote={to_remote}')
+    def _sync(self, _from, _to, is_push: bool = True) -> bool:
+        logger.info(f'sync from {_from} to {_to} is_remote={self.is_remote()} is_push={is_push}')
         if self.is_remote():
-            _, ok = sync_files(_from, _to, to_remote, self.host, USER)
+            _, ok = sync_files(_from, _to, is_push, self.host, USER)
         else:
             _, ok = sync_files(_from, _to)
         return ok
@@ -99,7 +99,7 @@ class FileWorker(Worker):
         if not task_dir:
             return NO_FILE
         logger.info(f'start pull {task_dir} from {self.id()}')
-        ok = self._sync(str(task_dir), to_storage, to_remote=False)
+        ok = self._sync(str(task_dir), to_storage, is_push=False)
         logger.info(f'end pull {task_dir} from {self.id()}')
         if ok:
             return OK
