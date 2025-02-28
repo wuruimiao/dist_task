@@ -19,9 +19,21 @@ NO_FILE = Error(6666, 'no file', 'sync同步没有文件')
 
 class FileStorage:
     def __init__(self, status_dir: str, task_dir: str, pull: bool):
-        self.status_dir = Path(status_dir)
-        self.task_dir = Path(task_dir)
-        self.pull = pull
+        self._status_dir = Path(status_dir)
+        self._task_dir = Path(task_dir)
+        self._pull = pull
+
+    @property
+    def status_dir(self) -> Path:
+        return self._status_dir
+
+    @property
+    def task_dir(self) -> Path:
+        return self._task_dir
+
+    @property
+    def pull(self) -> bool:
+        return self._pull
 
 
 class FileWorker(Worker):
