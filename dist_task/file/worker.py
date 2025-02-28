@@ -35,35 +35,42 @@ class FileStorage:
     def pull(self) -> bool:
         return self._pull
 
+    def __str__(self):
+        return f'status={self.status_dir} task={self.task_dir} pull={self.pull}'
+
+    def __repr__(self):
+        return str(self)
+
 
 class FileWorker(Worker):
     def __init__(self, host: str, con: int, storages: [FileStorage],
                  handlers: list[Callable], free: int = None, auto_clean: bool = False):
         super().__init__(handlers=handlers, con=con, free=free, auto_clean=auto_clean)
-        self._storages = storages
-        self._host = host
-
-    def set_local(self):
-        self._host = 'local'
+        self.storages = tuple(storages)
+        self.host = host
 
     def is_remote(self) -> bool:
-        return is_remote(self._host)
+        return is_remote(self.host)
 
     def _sync(self, _from, _to, to_remote: bool = True) -> bool:
         if self.is_remote():
-            _, ok = sync_files(_from, _to, to_remote, self._host, USER)
+            _, ok = sync_files(_from, _to, to_remote, self.host, USER)
         else:
             _, ok = sync_files(_from, _to)
         return ok
 
     def id(self) -> str:
-        return self._host
+        return self.host
+
+    def info(self) -> str:
+        return f'id={self.id()} con={self.concurrency} storages={self.storages} ' \
+               f'handler_num={len(self.handlers)} free={self.free} auto_clean={self.auto_clean}'
 
     def _make_task(self, task_id: str, storage: FileStorage) -> FileTask:
-        return FileTask(task_id, storage.task_dir, storage.status_dir, self._host)
+        return FileTask(task_id, storage.task_dir, storage.status_dir, self.host)
 
     def get_the_task(self, task_id: str) -> Optional[FileTask]:
-        for storage in self._storages:
+        for storage in self.storages:
             task = self._make_task(task_id, storage)
             if not task.is_init():
                 return task
@@ -104,8 +111,8 @@ class FileWorker(Worker):
 
     def get_all_tasks(self) -> dict[FileStorage, list[FileTask]]:
         tasks = OrderedDict()
-        for storage in self._storages:
-            files, _ = list_dir(self.is_remote(), self._host, USER, storage.status_dir)
+        for storage in self.storages:
+            files, _ = list_dir(self.is_remote(), self.host, USER, storage.status_dir)
             tasks[storage] = [self._make_task(task_id, storage) for task_id in files.keys()]
         return tasks
 
