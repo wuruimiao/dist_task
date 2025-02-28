@@ -151,7 +151,6 @@ class Worker(metaclass=ABCMeta):
                 for task in self.get_ing_tasks():
                     task.todo(force=True)
 
-                # TODO: 使用callback再push
                 while True:
                     limit = self.concurrency - ing_num.value
                     if limit > 0:
@@ -169,7 +168,6 @@ class Worker(metaclass=ABCMeta):
                     while True:
                         readies = {result for result in async_results if result.ready()}
                         async_results -= readies
-                        logger.info(f'waiting get {readies}')
                         if len(readies) > 0:
                             # 必须获取结果，否则错误会被忽略
                             logger.info(str([f'{r.successful()} {r.get()}' for r in readies]))
