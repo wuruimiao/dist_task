@@ -61,21 +61,21 @@ class Worker(metaclass=ABCMeta):
         pass
 
     @abstractmethod
-    def do_pull_task(self, task: Task, storage: Any) -> Error:
+    def do_pull_task(self, task: Task, to_storage: Any) -> Error:
         pass
 
     @abstractmethod
-    def do_push_task(self, task_id: id, task_storage: Any) -> tuple[Task, Error]:
+    def do_push_task(self, task_id: id, from_storage: Any) -> tuple[Task, Error]:
         pass
 
-    def pull_task(self, task: Task, storage: Any) -> Error:
-        err = self.do_pull_task(task, storage)
+    def pull_task(self, task: Task, to_storage: Any) -> Error:
+        err = self.do_pull_task(task, to_storage)
         if not err.ok:
             return err
         return task.done()
 
-    def push_task(self, task_id: str, task_storage: Any) -> Error:
-        task, err = self.do_push_task(task_id, task_storage)
+    def push_task(self, task_id: str, from_storage: Any) -> Error:
+        task, err = self.do_push_task(task_id, from_storage)
         if not err.ok:
             return err
         return task.todo()

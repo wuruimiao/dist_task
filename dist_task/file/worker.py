@@ -53,6 +53,7 @@ class FileWorker(Worker):
         return is_remote(self.host)
 
     def _sync(self, _from, _to, to_remote: bool = True) -> bool:
+        logger.info(f'sync from {_from} to {_to} is_remote={self.is_remote()} to_remote={to_remote}')
         if self.is_remote():
             _, ok = sync_files(_from, _to, to_remote, self.host, USER)
         else:
@@ -82,23 +83,22 @@ class FileWorker(Worker):
             for storage, tasks in self.get_all_tasks().items()
         ])
 
-    def do_push_task(self, task_id: str, task_storage: Path) -> tuple[FileTask, Error]:
+    def do_push_task(self, task_id: str, from_storage: Path) -> tuple[FileTask, Error]:
         storage_unfinished = self._get_storage_unfinished_id()
         storage = min(storage_unfinished, key=lambda key: len(storage_unfinished[key]))
-
-        ok = self._sync(str(task_storage), str(storage.task_dir))
+        ok = self._sync(str(from_storage), str(storage.task_dir))
 
         task = self._make_task(task_id, storage)
         if not ok:
             return task, SYNC
         return task, OK
 
-    def do_pull_task(self, task: FileTask, local_dir) -> Error:
+    def do_pull_task(self, task: FileTask, to_storage: Path) -> Error:
         task_dir, _ = task.task_dir()
         if not task_dir:
             return NO_FILE
         logger.info(f'start pull {task_dir} from {self.id()}')
-        ok = self._sync(str(task_dir), local_dir, to_remote=False)
+        ok = self._sync(str(task_dir), to_storage, to_remote=False)
         logger.info(f'end pull {task_dir} from {self.id()}')
         if ok:
             return OK

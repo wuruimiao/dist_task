@@ -1,15 +1,14 @@
 import time
-import traceback
 from abc import ABCMeta, abstractmethod
 from concurrent.futures import ThreadPoolExecutor
-from typing import Any
 from threading import Lock
+from typing import Any
 
 from common_tool.errno import Error, OK
 from common_tool.log import logger
 
-from dist_task.abstract.worker import Worker
 from dist_task.abstract.task import Task
+from dist_task.abstract.worker import Worker
 
 
 class Proxy(metaclass=ABCMeta):
@@ -41,47 +40,48 @@ class Proxy(metaclass=ABCMeta):
                 return worker
         return None
 
-    def _push_to_worker(self, worker, task_id_storage: [tuple[str, str]]):
+    def _push_to_worker(self, worker, from_task_id_storages: [tuple[str, str]]):
         oks = []
-        for task_id, task_storage in task_id_storage:
+        for task_id, task_storage in from_task_id_storages:
             logger.info(f'start push {task_id} {task_storage} to {worker}')
             err = worker.push_task(task_id, task_storage)
             if not err.ok:
                 logger.error(f'push err {task_id} {task_storage} {err}')
                 continue
 
-            self.record_pushed_worker_task(task_id, worker)
+            self.record_pushed_worker_task(task_id, worker.id())
             oks.append(task_id)
             logger.info(f"end push {task_id} {task_storage} to {worker}")
         return {'worker': worker.id(), 'ok': oks}
 
-    def push_tasks(self, task_id_storages: dict[str, Any]) -> Error:
-        if len(task_id_storages) == 0:
+    def push_tasks(self, to_push_task_id_storages: dict[str, Any]) -> Error:
+        if len(to_push_task_id_storages) == 0:
             return OK
 
         to_push = []
         for worker, free_num in self.free_workers().items():
-            task_id_storage: [tuple[str, str]] = []
+            from_task_id_storages: [tuple[str, str]] = []
             while free_num > 0:
-                if len(task_id_storages) == 0:
+                if len(to_push_task_id_storages) == 0:
                     logger.info(f'push task all pushed')
                     break
-                task_id, task_storage = task_id_storages.popitem()
+                task_id, from_task_storage = to_push_task_id_storages.popitem()
 
                 if self.is_pushed(task_id):
                     logger.info(f'push ignore task {task_id} pushed')
                     continue
 
                 free_num -= 1
-                task_id_storage.append((task_id, task_storage))
+                from_task_id_storages.append((task_id, from_task_storage))
 
-            if len(task_id_storage) > 0:
-                to_push.append((worker, task_id_storage))
+            if len(from_task_id_storages) > 0:
+                to_push.append((worker, from_task_id_storages))
 
         # 涉及子进程，.map会立即返回
         # self._thread_pool.map(lambda p: self._push_to_worker(*p), to_push)
-        futures = [self.thread_pool.submit(self._push_to_worker, worker, task_id_storage)
-                   for worker, task_id_storage in to_push]
+        futures = [self.thread_pool.submit(
+            self._push_to_worker, worker, from_task_id_storages)
+            for worker, from_task_id_storages in to_push]
         [future.result() for future in futures]
         return OK
 
