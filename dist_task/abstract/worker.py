@@ -3,18 +3,19 @@ import time
 import traceback
 from abc import ABCMeta, abstractmethod
 from multiprocessing import Pool, Manager
-from typing import Any, Optional, Callable
+from typing import Any, Optional, Callable, List, Tuple
 
 from common_tool.errno import Error
 from common_tool.log import logger
 
-from dist_task.abstract.task import Task
+from dist_task.abstract.task import Task, TaskT
 
 _DO = Error(7777, 'handle task', '任务执行异常')
 
 
 class Worker(metaclass=ABCMeta):
-    def __init__(self, handlers: list[Callable], con: int, free: int, auto_clean: bool):
+    def __init__(self, handlers: List[Tuple[Callable[[TaskT, Any], Error], Any]],
+                 con: int, free: int, auto_clean: bool):
         self._handlers = tuple(handlers)
         self._concurrency = con
         if not free:
@@ -116,26 +117,26 @@ class Worker(metaclass=ABCMeta):
             return err
 
         for handle in self.handlers:
-            err = handle(task)
+            err = handle[0](task, *handle[1:])
             if not err.ok:
                 task.fail()
                 return err
         return task.success()
 
     def handle_task(self, task: Task, ing_num, lock) -> Error:
-        logger.info(f"start handle task {task.info()} handler num: {len(self.handlers)}")
         err = _DO
+        logger.info(f"start handle task {task.info()} handler num: {len(self.handlers)}")
+        with lock:
+            ing_num.value += 1
 
         try:
-            with lock:
-                ing_num.value += 1
             logger.debug(f'start do {task}')
             err = self._do(task)
-            with lock:
-                ing_num.value -= 1
         except Exception:
             logger.error(f'handle task {task} exception: {traceback.format_exc()}')
 
+        with lock:
+            ing_num.value -= 1
         return err
 
     def start(self):
@@ -150,11 +151,13 @@ class Worker(metaclass=ABCMeta):
                 for task in self.get_ing_tasks():
                     task.todo(force=True)
 
+                # TODO: 使用callback再push
                 while True:
                     limit = self.concurrency - ing_num.value
                     if limit > 0:
                         todos = self.get_todo_tasks(limit)
                         if todos:
+                            logger.info(f'worker start push {todos}')
                             for task in todos:
                                 async_results.add(pool.apply_async(self.handle_task, args=(task, ing_num, lock)))
 
@@ -162,9 +165,13 @@ class Worker(metaclass=ABCMeta):
                         for task in self.get_done_tasks():
                             task.clean()
 
+                    logger.info(f'start waiting')
                     while True:
                         readies = {result for result in async_results if result.ready()}
                         async_results -= readies
+                        logger.info(f'waiting get {readies}')
                         if len(readies) > 0:
+                            # 必须获取结果，否则错误会被忽略
+                            logger.info(str([f'{r.successful()} {r.get()}' for r in readies]))
                             break
                         time.sleep(0.5)

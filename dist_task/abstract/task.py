@@ -1,4 +1,5 @@
 from abc import ABCMeta, abstractmethod
+from typing import TypeVar
 
 from common_tool.errno import Error
 
@@ -106,3 +107,6 @@ class Task(metaclass=ABCMeta):
         if not self.is_success() and not self.is_fail():
             return Done
         return self.mark_done()
+
+
+TaskT = TypeVar('TaskT', bound=Task)

@@ -1,14 +1,14 @@
 import math
 from collections import OrderedDict
 from pathlib import Path
-from typing import Optional, Callable
+from typing import Optional, Callable, Any, List, Tuple
 
 from common_tool.errno import Error, OK
 from common_tool.log import logger
 from common_tool.system import sync_files
 
 from dist_task.abstract import Worker
-from dist_task.abstract.task import Task
+from dist_task.abstract.task import Task, TaskT
 from dist_task.file.common import list_dir
 from dist_task.file.config import USER, is_remote
 from dist_task.file.task import FileTask
@@ -44,7 +44,8 @@ class FileStorage:
 
 class FileWorker(Worker):
     def __init__(self, host: str, con: int, storages: [FileStorage],
-                 handlers: list[Callable], free: int = None, auto_clean: bool = False):
+                 handlers: List[Tuple[Callable[[TaskT, Any], Error], Any]],
+                 free: int = None, auto_clean: bool = False, ):
         super().__init__(handlers=handlers, con=con, free=free, auto_clean=auto_clean)
         self.storages = tuple(storages)
         self.host = host
